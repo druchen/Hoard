@@ -1,10 +1,8 @@
 importScripts("hoard-settings.js");
 
 const NATIVE_HOST = "com.hoard.bridge";
-const MENU_ROOT = "hoard-root";
-const MENU_SETTINGS = "hoard-settings";
-const MENU_SEPARATOR = "hoard-separator";
-const MENU_FOLDER_PREFIX = "hoard-folder:";
+const MENU_ID = "hoard";
+const CONTENT_SCRIPTS = ["hoard-settings.js", "hoard-common.js", "sd.js", "artstation.js", "content.js"];
 const IMAGE_URL_EXT = /\.(jpe?g|png|gif|webp|avif|bmp)(\?|#|$)/i;
 const REFERER_RULE_ID = 1;
 const MIME_EXTENSIONS = {
@@ -18,9 +16,8 @@ const MIME_EXTENSIONS = {
   "image/bmp": "bmp",
 };
 let saveChain = Promise.resolve();
-let menuChain = Promise.resolve();
 
-// Pending overwrites: saveId → { filename, data, folderPath, folderName }
+// Saves waiting on the rename/overwrite dialog: saveId → { filename, ext, data, folderPath, folderName, note }
 const pendingOverwrites = new Map();
 
 function isImageResponse(contentType, url) {
@@ -279,29 +276,49 @@ async function hoardSaveRemote(message) {
   const encoded = await encodeImage(imageData, contentType, sourceUrl, settings.format, settings.quality);
   const pending = {
     filename: `${baseName}.${encoded.ext}`,
+    ext: encoded.ext,
     data: encoded.data,
     folderPath: folder.path,
     folderName: hoardFolderLabel(folder),
     note: message.metadataMissing ? "Title/year not found; used still id for filename." : "",
   };
-  const result = await saveViaNativeHost(pending);
+  return finishSave(pending, await saveViaNativeHost(pending));
+}
 
+/** Hand an "already exists" result to the page's rename dialog, keeping the image for the retry. */
+function finishSave(pending, result) {
   if (result.exists) {
     const saveId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     pendingOverwrites.set(saveId, pending);
-    // Auto-expire after 2 minutes
-    setTimeout(() => pendingOverwrites.delete(saveId), 120000);
+    // Auto-expire after 5 minutes
+    setTimeout(() => pendingOverwrites.delete(saveId), 300000);
     return {
       ok: false,
       exists: true,
       filename: result.filename,
+      suggested: result.suggested,
       folder: result.folder,
       folderName: pending.folderName,
       saveId,
     };
   }
-
   return { ...result, folderName: pending.folderName };
+}
+
+/** Save under a name typed in the rename dialog (or overwrite the existing file). */
+async function saveAs(saveId, filename, overwrite) {
+  const pending = pendingOverwrites.get(saveId);
+  if (!pending) {
+    return { ok: false, error: "Save expired. Please try saving again." };
+  }
+  pendingOverwrites.delete(saveId);
+  let name = String(filename || "").trim() || pending.filename;
+  if (!name.toLowerCase().endsWith(`.${pending.ext}`)) {
+    // Keep the saved format's extension even if the user deleted or changed it.
+    name = `${name.replace(/\.(webp|jpe?g|png|gif|avif|bmp)$/i, "")}.${pending.ext}`;
+  }
+  const next = { ...pending, filename: name };
+  return finishSave(next, await saveViaNativeHost(next, overwrite));
 }
 
 function enqueueSave(task) {
@@ -310,105 +327,33 @@ function enqueueSave(task) {
   return next;
 }
 
-/** File base name from the image URL, used when the page script is unavailable. */
-function fallbackFilename(srcUrl, pageUrl) {
-  let host = "hoard";
-  try {
-    host = new URL(pageUrl).hostname.replace(/^www\./, "") || host;
-  } catch {
-    // keep default
-  }
-  let base = "";
-  try {
-    const last = new URL(srcUrl).pathname.split("/").filter(Boolean).pop() || "";
-    base = decodeURIComponent(last)
-      .replace(/\.[^.]+$/, "")
-      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
-      .replace(/\s+/g, "_")
-      .slice(0, 150);
-  } catch {
-    base = "";
-  }
-  return base || `${host}_${Date.now()}`;
-}
-
-/**
- * Save straight from the background when the tab has no Hoard page script
- * (tab opened before the extension was installed or updated, or a restricted page).
- */
-async function saveWithoutPageScript(info, tab, folderId) {
-  const srcUrl = info.srcUrl || "";
-  if (!/^https?:\/\//i.test(srcUrl)) {
-    notify("Hoard save failed", "Reload the page and try again.");
-    return;
-  }
-  const pageUrl = info.frameUrl || info.pageUrl || tab?.url || "";
-  try {
-    const result = await enqueueSave(() =>
-      hoardSaveRemote({
-        urls: [srcUrl],
-        referer: pageUrl,
-        filename: fallbackFilename(srcUrl, pageUrl),
-        folderId,
-      })
+function createMenu() {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create(
+      { id: MENU_ID, title: "Hoard", contexts: ["image"] },
+      () => void chrome.runtime.lastError
     );
-    if (result.exists) {
-      notify("Hoard", `Already saved: ${result.filename}\nReload the page to get the overwrite option.`);
-      return;
-    }
-    handleSaveResult(result);
+  });
+}
+
+/** Ask the page to show the folder popup; inject the page scripts first if the tab predates the extension. */
+async function showPicker(tab, info) {
+  const target = { tabId: tab.id, frameIds: [info.frameId || 0] };
+  const message = { action: "hoardPick", srcUrl: info.srcUrl || "" };
+  const send = () =>
+    chrome.tabs.sendMessage(tab.id, message, { frameId: info.frameId || 0 });
+  try {
+    await send();
+    return;
+  } catch {
+    // No Hoard page script in this frame yet.
+  }
+  try {
+    await chrome.scripting.executeScript({ target, files: CONTENT_SCRIPTS });
+    await send();
   } catch (err) {
-    notify("Hoard save failed", String(err.message || err));
+    notify("Hoard", `Reload the page to use Hoard here. (${err.message || err})`);
   }
-}
-
-function createMenu(props) {
-  return new Promise((resolve) => {
-    chrome.contextMenus.create(props, () => {
-      if (chrome.runtime.lastError) {
-        console.warn("Hoard menu:", chrome.runtime.lastError.message);
-      }
-      resolve();
-    });
-  });
-}
-
-/**
- * Right-click menu: Hoard ▸ one item per folder. Titles start with the shortcut key so
- * typing it while the submenu is open selects the folder (menu type-ahead).
- */
-async function buildMenus() {
-  const { folders } = await loadHoardSettings();
-  await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve()));
-  await createMenu({ id: MENU_ROOT, title: "Hoard", contexts: ["image"] });
-  for (const folder of folders) {
-    const key = hoardShortcutLabel(folder.key);
-    await createMenu({
-      id: MENU_FOLDER_PREFIX + folder.id,
-      parentId: MENU_ROOT,
-      title: key ? `${key}   ${hoardFolderLabel(folder)}` : hoardFolderLabel(folder),
-      contexts: ["image"],
-    });
-  }
-  if (folders.length > 0) {
-    await createMenu({
-      id: MENU_SEPARATOR,
-      parentId: MENU_ROOT,
-      type: "separator",
-      contexts: ["image"],
-    });
-  }
-  await createMenu({
-    id: MENU_SETTINGS,
-    parentId: MENU_ROOT,
-    title: folders.length > 0 ? "Hoard settings…" : "Add save folders…",
-    contexts: ["image"],
-  });
-}
-
-function rebuildMenus() {
-  menuChain = menuChain.then(buildMenus, buildMenus).catch((err) => console.error("Hoard menus:", err));
-  return menuChain;
 }
 
 /** First run (or upgrade from fixed folders): seed folders from the bridge's config.py. */
@@ -435,45 +380,17 @@ async function seedFoldersIfNeeded() {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  seedFoldersIfNeeded()
-    .catch((err) => console.error("Hoard setup:", err))
-    .finally(() => rebuildMenus());
-});
-
-chrome.runtime.onStartup.addListener(() => {
-  void rebuildMenus();
-});
-
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.folders) {
-    void rebuildMenus();
-  }
+  createMenu();
+  seedFoldersIfNeeded().catch((err) => console.error("Hoard setup:", err));
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === MENU_SETTINGS) {
-    chrome.runtime.openOptionsPage();
-    return;
-  }
-  const id = String(info.menuItemId);
-  if (!id.startsWith(MENU_FOLDER_PREFIX)) return;
-  const folderId = id.slice(MENU_FOLDER_PREFIX.length);
-
+  if (info.menuItemId !== MENU_ID) return;
   if (!tab?.id || tab.id < 0) {
-    void saveWithoutPageScript(info, tab, folderId);
+    notify("Hoard", "Hoard can't open its folder menu here.");
     return;
   }
-
-  chrome.tabs.sendMessage(
-    tab.id,
-    { action: "hoardSave", srcUrl: info.srcUrl || "", folderId },
-    { frameId: info.frameId || 0 },
-    () => {
-      if (chrome.runtime.lastError) {
-        void saveWithoutPageScript(info, tab, folderId);
-      }
-    }
-  );
+  void showPicker(tab, info);
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -506,15 +423,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === "hoardConfirmOverwrite") {
-    const pending = pendingOverwrites.get(message.saveId);
-    if (!pending) {
-      sendResponse({ ok: false, error: "Save expired. Please try saving again." });
-      return true;
-    }
-    pendingOverwrites.delete(message.saveId);
-    enqueueSave(() => saveViaNativeHost(pending, true))
-      .then((result) => sendResponse({ ...result, folderName: pending.folderName }))
+  if (message.action === "hoardSaveAs") {
+    enqueueSave(() => saveAs(message.saveId, message.filename, Boolean(message.overwrite)))
+      .then((result) => sendResponse(result))
       .catch((err) => sendResponse({ ok: false, error: String(err.message || err) }));
     return true;
   }

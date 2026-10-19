@@ -2,7 +2,7 @@
 
 ## Usage
 
-Works on any website. Right-click an image → **Hoard** → pick a folder, or right-click and press **H** to open the folder picker, then press the folder's shortcut key (or click it).
+Works on any website. Right-click an image → **Hoard** (or press **H**) → a folder menu opens at the cursor; click a folder or press its shortcut key. If the file exists: Rename (proposes `name_YYYYMMDD.ext`, then `_01`, `_02`, …), Overwrite, or Cancel.
 
 Folders (any number), shortcut keys, format (WebP default, JPEG, PNG, Original) and quality (default 85) live on the settings page: `options.html`, opened from the toolbar icon or the menu.
 

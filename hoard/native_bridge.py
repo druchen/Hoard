@@ -3,8 +3,10 @@
 import base64
 import json
 import os
+import re
 import struct
 import sys
+from datetime import date
 
 from hoard import __version__
 from hoard.bridge_config import resolve_save_folder
@@ -48,6 +50,20 @@ def _safe_filename(name):
     return name if stem else "hoard" + name
 
 
+def suggest_filename(folder, filename):
+    """First free name of the form name_YYYYMMDD.ext, then name_YYYYMMDD_01.ext, _02, ..."""
+    stem, ext = os.path.splitext(filename)
+    today = date.today().strftime("%Y%m%d")
+    # Saving image_20261019.webp again should give image_20261019_01.webp, not a second date.
+    base = re.sub(rf"_{today}(_\d+)?$", "", stem) + f"_{today}"
+    candidate = f"{base}{ext}"
+    counter = 1
+    while os.path.exists(os.path.join(folder, candidate)):
+        candidate = f"{base}_{counter:02d}{ext}"
+        counter += 1
+    return candidate
+
+
 def handle_save(message):
     filename = _safe_filename(message.get("filename"))
     data_b64 = message.get("data")
@@ -75,6 +91,7 @@ def handle_save(message):
             "ok": False,
             "exists": True,
             "filename": filename,
+            "suggested": suggest_filename(target_dir, filename),
             "path": final_path,
             "folder": target_dir,
         }

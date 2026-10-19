@@ -52,7 +52,7 @@ function showHoardToast(title, message, isError) {
 
 function reportSaveResult(result) {
   if (result?.exists) {
-    showHoardOverwriteDialog(result);
+    showHoardRenameDialog(result);
     return;
   }
 
@@ -70,188 +70,139 @@ function reportSaveResult(result) {
   });
 }
 
-const HOARD_DIALOG_ID = "hoard-overwrite-dialog";
+const HOARD_POPUP_STYLE = `
+  :host { all: initial; }
+  .catcher { position: fixed; inset: 0; z-index: 2147483647; }
+  .catcher.dim { background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
+  .panel {
+    position: fixed; background: #1e1e1e; color: #ececec; border-radius: 8px;
+    border: 1px solid #3a3a3a; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .catcher.dim .panel { position: static; }
+  .title { padding: 10px 12px 6px; font-weight: 600; color: #bdbdbd; font-size: 12px; }
+  .list { overflow-y: auto; padding: 0 4px 4px; }
+  button.folder {
+    all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
+    display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 5px;
+  }
+  button.folder:hover, button.folder:focus-visible { background: #2f2f2f; }
+  kbd {
+    flex: none; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 4px; background: #3a3a3a; border: 1px solid #555;
+    font: 600 11px/1 ui-monospace, Menlo, Consolas, monospace;
+  }
+  kbd.empty { visibility: hidden; }
+  .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .footer {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 6px 12px; border-top: 1px solid #333; color: #8a8a8a; font-size: 11px;
+  }
+  .footer button, button.linkish { all: unset; cursor: pointer; color: #8ab4f8; }
+  .footer button:hover { text-decoration: underline; }
+  .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .body p { margin: 0; color: #bdbdbd; word-break: break-all; }
+  .body input {
+    box-sizing: border-box; width: 100%; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid #555; background: #2a2a2a; color: #ececec;
+    font: 13px ui-monospace, Menlo, Consolas, monospace;
+  }
+  .body input:focus { outline: 2px solid #4f9c66; outline-offset: -1px; }
+  .body .error { color: #f2847c; font-size: 12px; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .actions button {
+    all: unset; cursor: pointer; padding: 7px 16px; border-radius: 6px;
+    font-weight: 600; background: #3a3a3a; color: #fff;
+  }
+  .actions button.primary { background: #2d6a3e; }
+  .actions button:focus-visible { outline: 2px solid #8ab4f8; }
+`;
 
-function showHoardOverwriteDialog(result) {
-  const existing = document.getElementById(HOARD_DIALOG_ID);
-  if (existing) existing.remove();
+/**
+ * Mount a closed-shadow popup that keeps the page's keyboard shortcuts from firing.
+ * onKey(e) returns true when it handled the key. Returns { root, close }.
+ */
+function mountHoardPopup(id, html, onKey) {
+  document.getElementById(id)?.remove();
+  const host = document.createElement("div");
+  host.id = id;
+  const root = host.attachShadow({ mode: "closed" });
+  root.innerHTML = `<style>${HOARD_POPUP_STYLE}</style>${html}`;
 
-  const overlay = document.createElement("div");
-  overlay.id = HOARD_DIALOG_ID;
-  Object.assign(overlay.style, {
-    position: "fixed",
-    inset: "0",
-    zIndex: "2147483647",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "rgba(0,0,0,0.55)",
-    fontFamily: "system-ui, sans-serif",
-  });
-
-  const box = document.createElement("div");
-  Object.assign(box.style, {
-    background: "#1e1e1e",
-    color: "#e8e8e8",
-    borderRadius: "10px",
-    padding: "24px 28px",
-    maxWidth: "400px",
-    width: "90%",
-    boxShadow: "0 8px 32px rgba(0,0,0,.5)",
-    lineHeight: "1.5",
-  });
-
-  const title = document.createElement("div");
-  title.textContent = "File already exists";
-  Object.assign(title.style, { fontWeight: "700", fontSize: "15px", marginBottom: "10px" });
-
-  const msg = document.createElement("div");
-  msg.textContent = result.filename || "This file";
-  Object.assign(msg.style, {
-    fontSize: "13px",
-    color: "#aaa",
-    marginBottom: "6px",
-    wordBreak: "break-all",
-  });
-
-  const folder = document.createElement("div");
-  folder.textContent = result.folder || "";
-  Object.assign(folder.style, {
-    fontSize: "12px",
-    color: "#666",
-    marginBottom: "20px",
-    wordBreak: "break-all",
-  });
-
-  const btnRow = document.createElement("div");
-  Object.assign(btnRow.style, { display: "flex", gap: "10px", justifyContent: "flex-end" });
-
-  function makeBtn(label, bg, action) {
-    const btn = document.createElement("button");
-    btn.textContent = label;
-    Object.assign(btn.style, {
-      padding: "8px 20px",
-      borderRadius: "6px",
-      border: "none",
-      cursor: "pointer",
-      fontSize: "13px",
-      fontWeight: "600",
-      background: bg,
-      color: "#fff",
-    });
-    btn.addEventListener("click", action);
-    return btn;
+  function keyHandler(e) {
+    if (onKey(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    // Tab/Enter/Space still reach the popup's own controls; everything else stays away from the page.
+    if (!["Tab", "Enter", " "].includes(e.key)) e.stopPropagation();
+  }
+  function swallow(e) {
+    e.stopPropagation();
   }
 
-  const cancelBtn = makeBtn("Cancel", "#444", () => {
-    overlay.remove();
-    showHoardToast("Hoard", "Save cancelled.", false);
-  });
+  window.addEventListener("keydown", keyHandler, true);
+  window.addEventListener("keyup", swallow, true);
+  window.addEventListener("keypress", swallow, true);
+  document.documentElement.appendChild(host);
 
-  const overwriteBtn = makeBtn("Overwrite", "#b05a00", () => {
-    overlay.remove();
-    showHoardToast("Hoard", "Overwriting...", false);
-    chrome.runtime.sendMessage(
-      { action: "hoardConfirmOverwrite", saveId: result.saveId },
-      (res) => {
-        if (chrome.runtime.lastError) {
-          showHoardToast("Hoard save failed", chrome.runtime.lastError.message, true);
-          return;
-        }
-        if (res?.ok) {
-          let msg2 = `Saved to ${res.folderName || result.folderName || "folder"}: ${res.filename || result.filename}`;
-          if (res.folder) msg2 += `\n${res.folder}`;
-          showHoardToast("Hoard", msg2, false);
-        } else {
-          showHoardToast("Hoard save failed", res?.error || "Unknown error", true);
-        }
-      }
-    );
-  });
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
-
-  btnRow.appendChild(cancelBtn);
-  btnRow.appendChild(overwriteBtn);
-  box.appendChild(title);
-  box.appendChild(msg);
-  if (result.folder) box.appendChild(folder);
-  box.appendChild(btnRow);
-  overlay.appendChild(box);
-  document.documentElement.appendChild(overlay);
-  overwriteBtn.focus();
+  return {
+    root,
+    close() {
+      window.removeEventListener("keydown", keyHandler, true);
+      window.removeEventListener("keyup", swallow, true);
+      window.removeEventListener("keypress", swallow, true);
+      host.remove();
+    },
+  };
 }
 
 const HOARD_PICKER_ID = "hoard-folder-picker";
+const HOARD_RENAME_ID = "hoard-rename-dialog";
 
 function hoardPickerIsOpen() {
-  return Boolean(document.getElementById(HOARD_PICKER_ID));
+  return Boolean(document.getElementById(HOARD_PICKER_ID) || document.getElementById(HOARD_RENAME_ID));
 }
 
 /**
- * Overlay listing the save folders with their shortcut keys.
+ * Popup menu at the cursor listing the save folders with their shortcut keys.
  * Resolves with the chosen folder, or null if cancelled (Esc, click outside).
  */
-function showHoardFolderPicker(folders) {
-  document.getElementById(HOARD_PICKER_ID)?.remove();
-
+function showHoardFolderPicker(folders, position) {
   return new Promise((resolve) => {
-    const host = document.createElement("div");
-    host.id = HOARD_PICKER_ID;
-    const root = host.attachShadow({ mode: "closed" });
-    root.innerHTML = `
-      <style>
-        :host { all: initial; }
-        .overlay {
-          position: fixed; inset: 0; z-index: 2147483647;
-          display: flex; align-items: center; justify-content: center;
-          background: rgba(0, 0, 0, 0.45);
-          font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
-        }
-        .panel {
-          background: #1e1e1e; color: #ececec; border-radius: 10px;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-          width: min(340px, calc(100vw - 32px)); max-height: calc(100vh - 64px);
-          display: flex; flex-direction: column; overflow: hidden;
-        }
-        .title { padding: 14px 16px 8px; font-weight: 600; font-size: 14px; }
-        .list { overflow-y: auto; padding: 0 6px 6px; }
-        button.folder {
-          all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
-          display: flex; align-items: center; gap: 12px;
-          padding: 9px 10px; border-radius: 6px;
-        }
-        button.folder:hover, button.folder:focus-visible { background: #2f2f2f; }
-        kbd {
-          flex: none; min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box;
-          display: inline-flex; align-items: center; justify-content: center;
-          border-radius: 5px; background: #3a3a3a; border: 1px solid #555;
-          font: 600 12px/1 ui-monospace, Menlo, Consolas, monospace;
-        }
-        kbd.empty { visibility: hidden; }
-        .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .footer {
-          display: flex; justify-content: space-between; align-items: center;
-          padding: 8px 16px; border-top: 1px solid #333; color: #9a9a9a; font-size: 12px;
-        }
-        .footer button { all: unset; cursor: pointer; color: #8ab4f8; }
-        .footer button:hover { text-decoration: underline; }
-      </style>
-      <div class="overlay">
-        <div class="panel" role="dialog" aria-label="Save image to">
+    const popup = mountHoardPopup(
+      HOARD_PICKER_ID,
+      `<div class="catcher">
+        <div class="panel" role="menu" aria-label="Save image to">
           <div class="title">Save image to</div>
           <div class="list"></div>
           <div class="footer"><span>Esc to cancel</span><button type="button" class="settings">Settings</button></div>
         </div>
-      </div>`;
+      </div>`,
+      (e) => {
+        if (e.key === "Escape") {
+          finish(null);
+          return true;
+        }
+        const key = (e.key || "").toLowerCase();
+        if (e.ctrlKey || e.altKey || e.metaKey || key.length !== 1) return false;
+        const folder = folders.find((f) => f.key && f.key === key);
+        if (!folder) return false;
+        finish(folder);
+        return true;
+      }
+    );
+    const { root } = popup;
 
     const list = root.querySelector(".list");
     for (const folder of folders) {
       const btn = document.createElement("button");
       btn.className = "folder";
       btn.type = "button";
+      btn.setAttribute("role", "menuitem");
       btn.title = folder.path;
       const kbd = document.createElement("kbd");
       kbd.textContent = hoardShortcutLabel(folder.key);
@@ -264,38 +215,12 @@ function showHoardFolderPicker(folders) {
       list.appendChild(btn);
     }
 
-    const NAV_KEYS = ["Tab", "Enter", " "];
-
-    function onKey(e) {
-      const key = (e.key || "").toLowerCase();
-      const folder =
-        !e.ctrlKey && !e.altKey && !e.metaKey && key.length === 1
-          ? folders.find((f) => f.key && f.key === key)
-          : null;
-      if (e.key === "Escape" || folder) {
-        e.preventDefault();
-        e.stopPropagation();
-        finish(folder || null);
-        return;
-      }
-      swallow(e);
-    }
-
-    function swallow(e) {
-      // Keep the page's own keyboard shortcuts from firing while the picker is open;
-      // Tab/Enter/Space still move between and activate the folder buttons.
-      if (!NAV_KEYS.includes(e.key)) e.stopPropagation();
-    }
-
     function finish(folder) {
-      window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("keyup", swallow, true);
-      window.removeEventListener("keypress", swallow, true);
-      host.remove();
+      popup.close();
       resolve(folder);
     }
 
-    root.querySelector(".overlay").addEventListener("click", (e) => {
+    root.querySelector(".catcher").addEventListener("mousedown", (e) => {
       if (e.target === e.currentTarget) finish(null);
     });
     root.querySelector(".settings").addEventListener("click", () => {
@@ -303,12 +228,114 @@ function showHoardFolderPicker(folders) {
       finish(null);
     });
 
-    window.addEventListener("keydown", onKey, true);
-    window.addEventListener("keyup", swallow, true);
-    window.addEventListener("keypress", swallow, true);
-    document.documentElement.appendChild(host);
+    // Place the menu at the cursor, flipped/clamped to stay inside the window.
+    const panel = root.querySelector(".panel");
+    const margin = 8;
+    panel.style.width = "260px";
+    panel.style.maxHeight = `${Math.max(120, window.innerHeight - margin * 2)}px`;
+    const rect = panel.getBoundingClientRect();
+    const x = position?.x ?? (window.innerWidth - rect.width) / 2;
+    const y = position?.y ?? (window.innerHeight - rect.height) / 2;
+    let left = x + rect.width + margin > window.innerWidth ? x - rect.width : x;
+    let top = y + rect.height + margin > window.innerHeight ? y - rect.height : y;
+    left = Math.min(Math.max(margin, left), window.innerWidth - rect.width - margin);
+    top = Math.min(Math.max(margin, top), window.innerHeight - rect.height - margin);
+    panel.style.left = `${Math.max(margin, left)}px`;
+    panel.style.top = `${Math.max(margin, top)}px`;
+
     root.querySelector("button.folder")?.focus();
   });
+}
+
+/** "Already exists" dialog: rename (proposed dated name), overwrite, or cancel. */
+function showHoardRenameDialog(result, errorText = "") {
+  const toast = document.getElementById(HOARD_TOAST_ID);
+  if (toast) toast.style.display = "none";
+  const popup = mountHoardPopup(
+    HOARD_RENAME_ID,
+    `<div class="catcher dim">
+      <div class="panel" role="dialog" aria-label="File already exists" style="width: min(420px, calc(100vw - 32px))">
+        <div class="body">
+          <div style="font-weight:600;font-size:14px">File already exists</div>
+          <p class="message"></p>
+          <input type="text" class="filename" spellcheck="false" autocomplete="off" aria-label="Save as">
+          <div class="error" hidden></div>
+          <div class="actions">
+            <button type="button" class="cancel">Cancel</button>
+            <button type="button" class="overwrite">Overwrite</button>
+            <button type="button" class="primary save">Rename</button>
+          </div>
+        </div>
+      </div>
+    </div>`,
+    (e) => {
+      if (e.key === "Escape") {
+        cancel();
+        return true;
+      }
+      // Enter renames only from the name field; on a focused button it activates that button.
+      if (e.key === "Enter" && popup.root.activeElement === input) {
+        submit();
+        return true;
+      }
+      return false;
+    }
+  );
+  const { root } = popup;
+  const input = root.querySelector(".filename");
+  const error = root.querySelector(".error");
+  root.querySelector(".message").textContent =
+    `${result.filename} is already in ${result.folderName || result.folder || "this folder"}. Rename it, or overwrite the existing file:`;
+  input.value = result.suggested || result.filename || "";
+  if (errorText) {
+    error.textContent = errorText;
+    error.hidden = false;
+  }
+
+  let busy = false;
+
+  function cancel() {
+    if (busy) return;
+    popup.close();
+    showHoardToast("Hoard", "Save cancelled.", false);
+  }
+
+  function submit(overwrite = false) {
+    if (busy) return;
+    const filename = overwrite ? result.filename : input.value.trim();
+    if (!filename) {
+      error.textContent = "Enter a file name.";
+      error.hidden = false;
+      return;
+    }
+    busy = true;
+    showHoardToast("Hoard", overwrite ? "Overwriting..." : "Saving...", false);
+    chrome.runtime.sendMessage(
+      { action: "hoardSaveAs", saveId: result.saveId, filename, overwrite },
+      (res) => {
+        busy = false;
+        popup.close();
+        if (chrome.runtime.lastError) {
+          showHoardToast("Hoard save failed", chrome.runtime.lastError.message, true);
+          return;
+        }
+        if (res?.exists) {
+          showHoardRenameDialog(res, `${res.filename} also exists.`);
+          return;
+        }
+        reportSaveResult(res);
+      }
+    );
+  }
+
+  root.querySelector(".cancel").addEventListener("click", cancel);
+  root.querySelector(".overwrite").addEventListener("click", () => submit(true));
+  root.querySelector(".save").addEventListener("click", () => submit());
+
+  input.focus();
+  // Select the name part so typing replaces it but keeps the extension.
+  const dot = input.value.lastIndexOf(".");
+  input.setSelectionRange(0, dot > 0 ? dot : input.value.length);
 }
 
 function blobToBase64(blob) {

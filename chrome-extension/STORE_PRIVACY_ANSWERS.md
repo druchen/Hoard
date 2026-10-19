@@ -9,7 +9,7 @@ Also complete **Account Settings** (contact email + verification) — see bottom
 ## Single purpose description
 
 ```
-Hoard saves images from web pages to folders the user chooses on their computer (WebP, JPEG, PNG or the original file). The user initiates each save by right-clicking an image and picking a folder, or pressing H after right-click and choosing a folder. The extension does not collect analytics and does not change page content.
+Hoard saves images from web pages to folders the user chooses on their computer (WebP, JPEG, PNG or the original file). The user initiates each save by right-clicking an image, choosing Hoard (or pressing H), and picking a folder. The extension does not collect analytics and does not change page content.
 ```
 
 ---
@@ -19,7 +19,7 @@ Hoard saves images from web pages to folders the user chooses on their computer 
 ### contextMenus
 
 ```
-Adds a "Hoard" submenu listing the user's save folders when they right-click an image. This is how the user starts a save. The menu appears only when right-clicking an image.
+Adds a single "Hoard" item when the user right-clicks an image. Choosing it opens Hoard's folder menu on the page, which is how the user starts a save. The item appears only when right-clicking an image.
 ```
 
 ### host_permissions — <all_urls>
@@ -32,6 +32,12 @@ Hoard lets the user save any image they right-click, on whatever website they ar
 
 ```
 Many image servers reject downloads that have no Referer header. While Hoard downloads an image the user chose to save, it adds a temporary session rule that sends the page's origin as the Referer for that one request (the same value the browser sends when it displays the image), then removes the rule. No other requests are modified or blocked.
+```
+
+### scripting
+
+```
+If the user chooses Hoard on a tab that was already open before the extension was installed or updated, Hoard injects its own bundled content script into that tab so its folder menu can appear. Only the extension's packaged files are injected, only after the user's click.
 ```
 
 ### storage
@@ -100,7 +106,7 @@ How to use:
 1. Install the Hoard native bridge on Windows (see project documentation).
 2. Browse to any website in Chrome.
 3. Add your save folders and shortcut keys in Hoard settings.
-4. Right-click an image and pick a folder under Hoard — or right-click, press H, then the folder's shortcut key.
+4. Right-click an image, choose Hoard (or press H), then click a folder or press its shortcut key.
 
 Requires Windows or macOS and a one-time native bridge setup (Python 3).
 ```

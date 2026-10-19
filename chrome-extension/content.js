@@ -1,6 +1,7 @@
-/** Content script: right-click menu / H folder picker image save on any site. */
+/** Content script: Hoard menu item / H key → folder popup at the cursor → save. */
 
 let lastContextImg = null;
+let lastContextPos = null;
 let lastContextTime = 0;
 let saveInFlight = false;
 const CONTEXT_HOTKEY_MS = 5000;
@@ -9,11 +10,10 @@ const CONTEXT_MENU_MS = 30000;
 document.addEventListener(
   "contextmenu",
   (e) => {
+    lastContextPos = { x: e.clientX, y: e.clientY };
     const img = imageAtPoint(e);
-    if (img) {
-      lastContextImg = img;
-      lastContextTime = Date.now();
-    }
+    lastContextImg = img;
+    lastContextTime = img ? Date.now() : 0;
   },
   true
 );
@@ -38,25 +38,39 @@ document.addEventListener(
     e.stopPropagation();
     const img = lastContextImg;
     lastContextTime = 0;
-    void pickFolderAndSave(img.currentSrc || img.src || "", img);
+    void pickFolderAndSave(img.currentSrc || img.src || "", img, lastContextPos);
   },
   true
 );
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.action !== "hoardSave") {
+  if (message.action !== "hoardPick") {
     return false;
   }
 
-  const recent =
-    lastContextImg && Date.now() - lastContextTime < CONTEXT_MENU_MS ? lastContextImg : null;
-  const img = findImageForUrl(message.srcUrl) || recent;
-  void runSave(message.srcUrl || img?.currentSrc || img?.src || "", img, message.folderId);
+  const recent = Date.now() - lastContextTime < CONTEXT_MENU_MS;
+  const img = findImageForUrl(message.srcUrl) || (recent ? lastContextImg : null);
+  lastContextTime = 0;
+  void pickFolderAndSave(
+    message.srcUrl || img?.currentSrc || img?.src || "",
+    img,
+    recent ? lastContextPos : imageCenter(img)
+  );
   sendResponse({ received: true });
   return false;
 });
 
-async function pickFolderAndSave(srcUrl, img) {
+/** Popup position when the right-click itself was not seen (script injected afterwards). */
+function imageCenter(img) {
+  const rect = img?.getBoundingClientRect();
+  if (!rect || !rect.width) return null;
+  return {
+    x: Math.min(Math.max(rect.left + rect.width / 2, 0), window.innerWidth),
+    y: Math.min(Math.max(rect.top + rect.height / 2, 0), window.innerHeight),
+  };
+}
+
+async function pickFolderAndSave(srcUrl, img, position) {
   const { folders } = await loadHoardSettings();
   const usable = folders.filter((folder) => folder.path);
   if (usable.length === 0) {
@@ -64,7 +78,7 @@ async function pickFolderAndSave(srcUrl, img) {
     chrome.runtime.sendMessage({ action: "openSettings" }, () => void chrome.runtime.lastError);
     return;
   }
-  const folder = await showHoardFolderPicker(usable);
+  const folder = await showHoardFolderPicker(usable, position);
   if (folder) {
     await runSave(srcUrl, img, folder.id);
   }

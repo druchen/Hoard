@@ -7,9 +7,12 @@ Sibling project to **[Hoard](../Hoard)** (desktop drag-and-drop app).
 ## Usage
 
 1. Right-click an **image** on any website
-2. Hover **Hoard** and pick a folder — or press **H**, then the folder's shortcut key (or click it) in the picker that appears
+2. Click **Hoard** (or press **H**) — the right-click menu closes and a folder menu opens at the cursor
+3. Click a folder, or press its shortcut key
 
-Folders, shortcut keys, image format and quality are set on the **Hoard settings** page (click the Hoard toolbar icon, or **Hoard ▸ Hoard settings…** in the right-click menu). Add as many folders as you like; **Browse…** opens your system folder picker through the native bridge.
+If the file already exists, choose **Rename** (a free name is proposed: `image_20261019.webp`, then `image_20261019_01.webp`, `_02`, …), **Overwrite**, or **Cancel**.
+
+Folders, shortcut keys, image format and quality are set on the **Hoard settings** page (click the Hoard toolbar icon, or **Settings** in the folder menu). Add as many folders as you like; **Browse…** opens your system folder picker through the native bridge.
 
 | Format | Notes |
 |--------|-------|
