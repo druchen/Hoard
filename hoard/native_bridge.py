@@ -1,4 +1,4 @@
-"""Chrome Native Messaging host: writes WebP bytes to Concept or Cinematography."""
+"""Chrome Native Messaging host: saves images to the folders chosen in Hoard settings."""
 
 import base64
 import json
@@ -6,7 +6,11 @@ import os
 import struct
 import sys
 
+from hoard import __version__
 from hoard.bridge_config import resolve_save_folder
+from hoard.config import default_folders
+
+ALLOWED_EXTENSIONS = (".webp", ".jpg", ".jpeg", ".png", ".gif", ".avif", ".bmp")
 
 
 def _read_message():
@@ -30,17 +34,21 @@ def _write_message(message):
 
 
 def _safe_filename(name):
-    name = os.path.basename(name or "").strip()
-    if not name.lower().endswith(".webp"):
-        name = f"{name}.webp" if name else "hoard.webp"
+    name = os.path.basename((name or "").replace("\\", "/")).strip()
     if sys.platform == "win32":
-        name = "".join(c for c in name if c not in '<>:"/\\|?*')
+        name = "".join(c for c in name if c not in '<>:"/\\|?*' and ord(c) >= 32)
+        name = name.rstrip(". ")
     else:
         name = name.replace("/", "_").replace("\0", "")
-    return name or "hoard.webp"
+    if name.startswith("."):
+        name = name.lstrip(".")
+    if not name.lower().endswith(ALLOWED_EXTENSIONS):
+        name = f"{name}.webp" if name else "hoard.webp"
+    stem = os.path.splitext(name)[0]
+    return name if stem else "hoard" + name
 
 
-def handle_message(message):
+def handle_save(message):
     filename = _safe_filename(message.get("filename"))
     data_b64 = message.get("data")
     if not data_b64:
@@ -78,6 +86,55 @@ def handle_message(message):
         return {"ok": False, "error": str(e)}
 
     return {"ok": True, "path": final_path, "filename": filename, "folder": target_dir}
+
+
+def handle_pick_folder(message):
+    """Open the system folder picker (used by the Browse button in Hoard settings)."""
+    try:
+        import tkinter
+        from tkinter import filedialog
+    except Exception:
+        return {
+            "ok": False,
+            "error": "Folder picker unavailable (this Python has no tkinter). Type the path instead.",
+        }
+
+    initial = message.get("initial") or ""
+    if not os.path.isdir(initial):
+        initial = os.path.expanduser("~")
+
+    try:
+        root = tkinter.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        root.lift()
+        root.focus_force()
+        path = filedialog.askdirectory(
+            parent=root,
+            initialdir=initial,
+            title="Choose a Hoard save folder",
+            mustexist=False,
+        )
+        root.destroy()
+    except Exception as e:
+        return {"ok": False, "error": f"Folder picker failed: {e}. Type the path instead."}
+
+    if not path:
+        return {"ok": False, "cancelled": True}
+    return {"ok": True, "path": os.path.normpath(path)}
+
+
+def handle_message(message):
+    action = message.get("action") or "save"
+    if action == "ping":
+        return {"ok": True, "version": __version__, "platform": sys.platform}
+    if action == "defaults":
+        return {"ok": True, "folders": default_folders()}
+    if action == "pickFolder":
+        return handle_pick_folder(message)
+    if action == "save":
+        return handle_save(message)
+    return {"ok": False, "error": f"Unknown action: {action}"}
 
 
 def main():

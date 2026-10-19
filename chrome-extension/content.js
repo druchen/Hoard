@@ -1,4 +1,4 @@
-/** Content script: right-click / H hotkey image save on any site. */
+/** Content script: right-click menu / H folder picker image save on any site. */
 
 let lastContextImg = null;
 let lastContextTime = 0;
@@ -18,23 +18,30 @@ document.addEventListener(
   true
 );
 
-document.addEventListener("keydown", (e) => {
-  if (e.key?.toLowerCase() !== "h" || e.ctrlKey || e.altKey || e.metaKey) {
-    return;
-  }
-  if (e.target.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])")) {
-    return;
-  }
-  if (!lastContextTime || Date.now() - lastContextTime > CONTEXT_HOTKEY_MS) {
-    // Only nag when the user just right-clicked something; plain "h" typing elsewhere stays silent.
-    return;
-  }
-  e.preventDefault();
-  const img = lastContextImg;
-  lastContextTime = 0;
-  // folderKey null → background picks the site default or the last folder used.
-  void runSave(img.currentSrc || img.src || "", img, null);
-});
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key?.toLowerCase() !== "h" || e.ctrlKey || e.altKey || e.metaKey) {
+      return;
+    }
+    if (hoardPickerIsOpen()) {
+      return;
+    }
+    if (e.target.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])")) {
+      return;
+    }
+    if (!lastContextTime || Date.now() - lastContextTime > CONTEXT_HOTKEY_MS) {
+      // Only act right after an image right-click; plain "h" typing elsewhere stays untouched.
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const img = lastContextImg;
+    lastContextTime = 0;
+    void pickFolderAndSave(img.currentSrc || img.src || "", img);
+  },
+  true
+);
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action !== "hoardSave") {
@@ -44,12 +51,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const recent =
     lastContextImg && Date.now() - lastContextTime < CONTEXT_MENU_MS ? lastContextImg : null;
   const img = findImageForUrl(message.srcUrl) || recent;
-  void runSave(message.srcUrl || img?.currentSrc || img?.src || "", img, message.folderKey);
+  void runSave(message.srcUrl || img?.currentSrc || img?.src || "", img, message.folderId);
   sendResponse({ received: true });
   return false;
 });
 
-async function runSave(srcUrl, img, folderKey) {
+async function pickFolderAndSave(srcUrl, img) {
+  const { folders } = await loadHoardSettings();
+  const usable = folders.filter((folder) => folder.path);
+  if (usable.length === 0) {
+    showHoardToast("Hoard", "No save folders yet. Add them in Hoard settings.", true);
+    chrome.runtime.sendMessage({ action: "openSettings" }, () => void chrome.runtime.lastError);
+    return;
+  }
+  const folder = await showHoardFolderPicker(usable);
+  if (folder) {
+    await runSave(srcUrl, img, folder.id);
+  }
+}
+
+async function runSave(srcUrl, img, folderId) {
   if (saveInFlight) {
     showHoardToast("Hoard", "Already saving. Please wait...", true);
     return;
@@ -62,7 +83,7 @@ async function runSave(srcUrl, img, folderKey) {
     const request = await buildSaveRequest(srcUrl, img);
     const result = request.error
       ? { ok: false, error: request.error }
-      : await requestBackgroundSave({ ...request, folderKey, referer: location.href });
+      : await requestBackgroundSave({ ...request, folderId, referer: location.href });
     reportSaveResult(result);
   } catch (err) {
     reportSaveResult({ ok: false, error: String(err?.message || err) });

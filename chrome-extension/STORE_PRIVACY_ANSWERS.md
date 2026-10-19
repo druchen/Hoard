@@ -9,7 +9,7 @@ Also complete **Account Settings** (contact email + verification) — see bottom
 ## Single purpose description
 
 ```
-Hoard saves images from web pages to local reference folders on the user's computer as WebP files. The user initiates each save by right-clicking an image or pressing H after right-click. The extension does not collect analytics and does not change page content.
+Hoard saves images from web pages to folders the user chooses on their computer (WebP, JPEG, PNG or the original file). The user initiates each save by right-clicking an image and picking a folder, or pressing H after right-click and choosing a folder. The extension does not collect analytics and does not change page content.
 ```
 
 ---
@@ -19,7 +19,7 @@ Hoard saves images from web pages to local reference folders on the user's compu
 ### contextMenus
 
 ```
-Adds save menu items when the user right-clicks an image (for example, "Hoard — Cinematography (H)" or "Hoard — Concept (H)"). This is how the user starts a save. Menus appear only when right-clicking an image.
+Adds a "Hoard" submenu listing the user's save folders when they right-click an image. This is how the user starts a save. The menu appears only when right-clicking an image.
 ```
 
 ### host_permissions — <all_urls>
@@ -37,13 +37,13 @@ Many image servers reject downloads that have no Referer header. While Hoard dow
 ### storage
 
 ```
-Remembers which save folder the user last chose from the menu, so the H shortcut saves to the same folder. Stored locally only; no personal data.
+Stores the user's Hoard settings: their save folders (name, local path, shortcut key) and preferred image format and quality. Stored locally in the browser only; never transmitted.
 ```
 
 ### nativeMessaging
 
 ```
-After the user saves an image, the extension sends WebP bytes to a registered local program (Hoard native bridge) so the file can be written to the user's configured reference folders. Native messaging is required because Chrome extensions cannot write to arbitrary disk paths directly.
+After the user saves an image, the extension sends the image bytes to a registered local program (Hoard native bridge) so the file can be written to the folder the user chose. The settings page also asks the bridge to open the system folder picker. Native messaging is required because Chrome extensions cannot write to arbitrary disk paths directly.
 ```
 
 ### notifications
@@ -88,20 +88,21 @@ Hoard does not collect, store, or transmit personal data to the developer. When 
 **Summary** (short, shown in search):
 
 ```
-Save images from the web to local reference folders as WebP. Right-click or press H.
+Save images from any website to your own folders. Right-click, or press H and a shortcut key.
 ```
 
 **Detailed description:**
 
 ```
-Hoard saves images from the web to your local reference folders as WebP files.
+Hoard saves images from any website to folders you choose, as WebP, JPEG, PNG or the original file.
 
 How to use:
 1. Install the Hoard native bridge on Windows (see project documentation).
 2. Browse to any website in Chrome.
-3. Right-click an image and choose a Hoard save option — or right-click and press H.
+3. Add your save folders and shortcut keys in Hoard settings.
+4. Right-click an image and pick a folder under Hoard — or right-click, press H, then the folder's shortcut key.
 
-Requires Windows and a one-time native host setup.
+Requires Windows or macOS and a one-time native bridge setup (Python 3).
 ```
 
 ---

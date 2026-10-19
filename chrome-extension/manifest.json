@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Hoard",
   "short_name": "Hoard",
-  "version": "1.3.0",
-  "description": "Save images from any website to your local reference folders as WebP. Right-click an image or press H.",
+  "version": "1.4.0",
+  "description": "Save images from any website to your own folders, with shortcut keys. WebP, JPEG or PNG.",
   "permissions": [
     "contextMenus",
     "declarativeNetRequestWithHostAccess",
@@ -17,6 +17,16 @@
   "background": {
     "service_worker": "background.js"
   },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "Hoard settings",
+    "default_icon": {
+      "48": "icon48.png"
+    }
+  },
   "icons": {
     "48": "icon48.png",
     "128": "icon48.png"
@@ -27,6 +37,7 @@
         "<all_urls>"
       ],
       "js": [
+        "hoard-settings.js",
         "hoard-common.js",
         "sd.js",
         "artstation.js",

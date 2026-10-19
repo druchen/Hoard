@@ -125,15 +125,15 @@ function resolveArtStationImageUrl(srcUrl) {
   return srcUrl;
 }
 
-/** Filename from image URL path, e.g. .../large/my-piece.jpg → my-piece.webp */
+/** File base name from image URL path, e.g. .../large/my-piece.jpg → my-piece */
 function filenameFromArtStationUrl(url) {
   try {
     const pathname = new URL(url).pathname;
     const base = pathname.split("/").pop() || "artstation";
     const nameOnly = base.replace(/\.[^.]+$/i, "");
     const safe = sanitizePart(decodeURIComponent(nameOnly));
-    return `${safe || "artstation"}.webp`;
+    return safe || "artstation";
   } catch {
-    return "artstation.webp";
+    return "artstation";
   }
 }

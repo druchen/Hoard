@@ -59,7 +59,7 @@ function reportSaveResult(result) {
   if (!result?.ok) {
     showHoardToast("Hoard save failed", result?.error || "Unknown error", true);
   } else {
-    let msg = `Saved: ${result.filename || "image"}`;
+    let msg = `Saved to ${result.folderName || "folder"}: ${result.filename || "image"}`;
     if (result.folder) msg += `\n${result.folder}`;
     if (result.note) msg += `\n(${result.note})`;
     showHoardToast("Hoard", msg, false);
@@ -159,7 +159,7 @@ function showHoardOverwriteDialog(result) {
           return;
         }
         if (res?.ok) {
-          let msg2 = `Saved: ${res.filename || result.filename}`;
+          let msg2 = `Saved to ${res.folderName || result.folderName || "folder"}: ${res.filename || result.filename}`;
           if (res.folder) msg2 += `\n${res.folder}`;
           showHoardToast("Hoard", msg2, false);
         } else {
@@ -182,6 +182,133 @@ function showHoardOverwriteDialog(result) {
   overlay.appendChild(box);
   document.documentElement.appendChild(overlay);
   overwriteBtn.focus();
+}
+
+const HOARD_PICKER_ID = "hoard-folder-picker";
+
+function hoardPickerIsOpen() {
+  return Boolean(document.getElementById(HOARD_PICKER_ID));
+}
+
+/**
+ * Overlay listing the save folders with their shortcut keys.
+ * Resolves with the chosen folder, or null if cancelled (Esc, click outside).
+ */
+function showHoardFolderPicker(folders) {
+  document.getElementById(HOARD_PICKER_ID)?.remove();
+
+  return new Promise((resolve) => {
+    const host = document.createElement("div");
+    host.id = HOARD_PICKER_ID;
+    const root = host.attachShadow({ mode: "closed" });
+    root.innerHTML = `
+      <style>
+        :host { all: initial; }
+        .overlay {
+          position: fixed; inset: 0; z-index: 2147483647;
+          display: flex; align-items: center; justify-content: center;
+          background: rgba(0, 0, 0, 0.45);
+          font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+        .panel {
+          background: #1e1e1e; color: #ececec; border-radius: 10px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+          width: min(340px, calc(100vw - 32px)); max-height: calc(100vh - 64px);
+          display: flex; flex-direction: column; overflow: hidden;
+        }
+        .title { padding: 14px 16px 8px; font-weight: 600; font-size: 14px; }
+        .list { overflow-y: auto; padding: 0 6px 6px; }
+        button.folder {
+          all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
+          display: flex; align-items: center; gap: 12px;
+          padding: 9px 10px; border-radius: 6px;
+        }
+        button.folder:hover, button.folder:focus-visible { background: #2f2f2f; }
+        kbd {
+          flex: none; min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box;
+          display: inline-flex; align-items: center; justify-content: center;
+          border-radius: 5px; background: #3a3a3a; border: 1px solid #555;
+          font: 600 12px/1 ui-monospace, Menlo, Consolas, monospace;
+        }
+        kbd.empty { visibility: hidden; }
+        .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .footer {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 8px 16px; border-top: 1px solid #333; color: #9a9a9a; font-size: 12px;
+        }
+        .footer button { all: unset; cursor: pointer; color: #8ab4f8; }
+        .footer button:hover { text-decoration: underline; }
+      </style>
+      <div class="overlay">
+        <div class="panel" role="dialog" aria-label="Save image to">
+          <div class="title">Save image to</div>
+          <div class="list"></div>
+          <div class="footer"><span>Esc to cancel</span><button type="button" class="settings">Settings</button></div>
+        </div>
+      </div>`;
+
+    const list = root.querySelector(".list");
+    for (const folder of folders) {
+      const btn = document.createElement("button");
+      btn.className = "folder";
+      btn.type = "button";
+      btn.title = folder.path;
+      const kbd = document.createElement("kbd");
+      kbd.textContent = hoardShortcutLabel(folder.key);
+      if (!folder.key) kbd.className = "empty";
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = hoardFolderLabel(folder);
+      btn.append(kbd, name);
+      btn.addEventListener("click", () => finish(folder));
+      list.appendChild(btn);
+    }
+
+    const NAV_KEYS = ["Tab", "Enter", " "];
+
+    function onKey(e) {
+      const key = (e.key || "").toLowerCase();
+      const folder =
+        !e.ctrlKey && !e.altKey && !e.metaKey && key.length === 1
+          ? folders.find((f) => f.key && f.key === key)
+          : null;
+      if (e.key === "Escape" || folder) {
+        e.preventDefault();
+        e.stopPropagation();
+        finish(folder || null);
+        return;
+      }
+      swallow(e);
+    }
+
+    function swallow(e) {
+      // Keep the page's own keyboard shortcuts from firing while the picker is open;
+      // Tab/Enter/Space still move between and activate the folder buttons.
+      if (!NAV_KEYS.includes(e.key)) e.stopPropagation();
+    }
+
+    function finish(folder) {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keyup", swallow, true);
+      window.removeEventListener("keypress", swallow, true);
+      host.remove();
+      resolve(folder);
+    }
+
+    root.querySelector(".overlay").addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) finish(null);
+    });
+    root.querySelector(".settings").addEventListener("click", () => {
+      chrome.runtime.sendMessage({ action: "openSettings" }, () => void chrome.runtime.lastError);
+      finish(null);
+    });
+
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("keyup", swallow, true);
+    window.addEventListener("keypress", swallow, true);
+    document.documentElement.appendChild(host);
+    root.querySelector("button.folder")?.focus();
+  });
 }
 
 function blobToBase64(blob) {
@@ -316,7 +443,7 @@ function genericImageCandidates(srcUrl, img) {
 
 const GENERIC_NAME = /^(image|img|photo|picture|original|orig|download|file|media|default|index|full|large|medium|small|thumb|[0-9]{1,6})$/i;
 
-/** Filename from image URL path, e.g. .../my-piece.jpg → my-piece.webp */
+/** File base name from image URL path, e.g. .../my-piece.jpg → my-piece (extension added on save). */
 function filenameFromImageUrl(url) {
   const host = sanitizePart(location.hostname.replace(/^www\./, ""));
   let base = "";
@@ -334,5 +461,5 @@ function filenameFromImageUrl(url) {
   } else if (GENERIC_NAME.test(base)) {
     base = `${host}_${base}`;
   }
-  return `${base}.webp`;
+  return base;
 }

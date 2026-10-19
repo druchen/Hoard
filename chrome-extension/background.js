@@ -1,17 +1,26 @@
-const NATIVE_HOST = "com.hoard.bridge";
-const MENU_CINEMATOGRAPHY = "hoard-cinematography";
-const MENU_CONCEPT = "hoard-concept";
-const MENU_FOLDERS = {
-  [MENU_CINEMATOGRAPHY]: "cinematography",
-  [MENU_CONCEPT]: "concept",
-};
-const DEFAULT_FOLDER_KEY = "cinematography";
-const IMAGE_URL_EXT = /\.(jpe?g|png|gif|webp|avif|bmp)(\?|#|$)/i;
-const WEBP_QUALITY = 0.8;
-const REFERER_RULE_ID = 1;
-let saveChain = Promise.resolve();
+importScripts("hoard-settings.js");
 
-// Pending overwrites: saveId → { filename, webpB64, folderKey, metadataMissing }
+const NATIVE_HOST = "com.hoard.bridge";
+const MENU_ROOT = "hoard-root";
+const MENU_SETTINGS = "hoard-settings";
+const MENU_SEPARATOR = "hoard-separator";
+const MENU_FOLDER_PREFIX = "hoard-folder:";
+const IMAGE_URL_EXT = /\.(jpe?g|png|gif|webp|avif|bmp)(\?|#|$)/i;
+const REFERER_RULE_ID = 1;
+const MIME_EXTENSIONS = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/pjpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/avif": "avif",
+  "image/bmp": "bmp",
+};
+let saveChain = Promise.resolve();
+let menuChain = Promise.resolve();
+
+// Pending overwrites: saveId → { filename, data, folderPath, folderName }
 const pendingOverwrites = new Map();
 
 function isImageResponse(contentType, url) {
@@ -135,11 +144,29 @@ async function fetchImageInBackground(url, referer) {
   }
 }
 
-async function convertImageDataToWebPBase64(data, contentType) {
-  if ((contentType || "").toLowerCase().includes("image/webp")) {
-    // Already WebP: keep the original bytes instead of re-encoding.
-    return data;
+function extensionForMime(contentType, url) {
+  const mime = (contentType || "").split(";")[0].trim().toLowerCase();
+  if (MIME_EXTENSIONS[mime]) return MIME_EXTENSIONS[mime];
+  const match = (url || "").match(IMAGE_URL_EXT);
+  if (match) return match[1].toLowerCase() === "jpeg" ? "jpg" : match[1].toLowerCase();
+  return "jpg";
+}
+
+/**
+ * Encode the downloaded image in the chosen format. Images already in that format are kept
+ * as-is so they are not compressed twice.
+ */
+async function encodeImage(data, contentType, sourceUrl, format, quality) {
+  const target = HOARD_FORMATS[format] || HOARD_FORMATS[HOARD_DEFAULT_FORMAT];
+  const sourceMime = (contentType || "").split(";")[0].trim().toLowerCase();
+
+  if (!target.mime) {
+    return { data, ext: extensionForMime(contentType, sourceUrl) };
   }
+  if (sourceMime === target.mime || (target.ext === "jpg" && sourceMime === "image/jpg")) {
+    return { data, ext: target.ext };
+  }
+
   const blob = new Blob([base64ToBytes(data)], { type: contentType || "image/jpeg" });
   let bitmap;
   try {
@@ -149,10 +176,20 @@ async function convertImageDataToWebPBase64(data, contentType) {
   }
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext("2d");
+  if (target.mime === "image/jpeg") {
+    // JPEG has no transparency; flatten onto white instead of black.
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, bitmap.width, bitmap.height);
+  }
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
-  const webpBlob = await canvas.convertToBlob({ type: "image/webp", quality: WEBP_QUALITY });
-  return arrayBufferToBase64(await webpBlob.arrayBuffer());
+  const options = { type: target.mime };
+  if (target.lossy) options.quality = clampHoardQuality(quality) / 100;
+  const encoded = await canvas.convertToBlob(options);
+  if (encoded.type !== target.mime) {
+    throw new Error(`This browser cannot encode ${target.label}.`);
+  }
+  return { data: arrayBufferToBase64(await encoded.arrayBuffer()), ext: target.ext };
 }
 
 function describeNativeError(message) {
@@ -169,62 +206,54 @@ function describeNativeError(message) {
   return `${message} Install the Hoard native bridge (see README).`;
 }
 
-function saveViaNativeHost(filename, data, folderKey, metadataMissing, overwrite = false) {
+function sendToBridge(message) {
   return new Promise((resolve) => {
-    chrome.runtime.sendNativeMessage(
-      NATIVE_HOST,
-      {
-        filename,
-        data,
-        folderKey: folderKey || DEFAULT_FOLDER_KEY,
-        overwrite,
-      },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          resolve({ ok: false, error: describeNativeError(chrome.runtime.lastError.message) });
-          return;
-        }
-        if (metadataMissing && response?.ok) {
-          response.note = "Title/year not found; used still id for filename.";
-        }
-        resolve(response || { ok: false, error: "Native bridge returned no response." });
+    chrome.runtime.sendNativeMessage(NATIVE_HOST, message, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve({ ok: false, error: describeNativeError(chrome.runtime.lastError.message) });
+        return;
       }
-    );
+      resolve(response || { ok: false, error: "Native bridge returned no response." });
+    });
   });
 }
 
-async function getLastFolderKey() {
-  try {
-    const { lastFolderKey } = await chrome.storage.local.get("lastFolderKey");
-    return lastFolderKey || DEFAULT_FOLDER_KEY;
-  } catch {
-    return DEFAULT_FOLDER_KEY;
+async function saveViaNativeHost(pending, overwrite = false) {
+  const response = await sendToBridge({
+    action: "save",
+    filename: pending.filename,
+    data: pending.data,
+    folderPath: pending.folderPath,
+    overwrite,
+  });
+  if (response.ok && pending.note) {
+    response.note = pending.note;
   }
+  return response;
 }
 
-/** Folder for an H-hotkey save: site default, else the last folder picked from the menu. */
-async function resolveFolderKey(folderKey, pageUrl) {
-  if (folderKey) return folderKey;
-  let host = "";
-  try {
-    host = new URL(pageUrl).hostname;
-  } catch {
-    host = "";
+async function findFolder(folderId) {
+  const settings = await loadHoardSettings();
+  const folder = settings.folders.find((f) => f.id === folderId);
+  if (!folder) {
+    throw new Error("That save folder no longer exists. Pick another or open Hoard settings.");
   }
-  if (host === "shotdeck.com" || host.endsWith(".shotdeck.com")) return "cinematography";
-  if (host === "artstation.com" || host.endsWith(".artstation.com")) return "concept";
-  return getLastFolderKey();
+  if (!folder.path) {
+    throw new Error(`No path set for "${hoardFolderLabel(folder)}". Open Hoard settings to add one.`);
+  }
+  return { folder, settings };
 }
 
 async function hoardSaveRemote(message) {
+  const { folder, settings } = await findFolder(message.folderId);
   const urls = Array.isArray(message.urls) ? message.urls : [];
   const referer = message.referer || "";
-  const filename = message.filename || "hoard.webp";
-  const folderKey = await resolveFolderKey(message.folderKey, referer);
+  const baseName = message.filename || "hoard";
 
   let lastError = null;
   let imageData = message.data || null;
   let contentType = message.contentType || null;
+  let sourceUrl = "";
 
   if (!imageData) {
     for (const url of urls) {
@@ -235,6 +264,7 @@ async function hoardSaveRemote(message) {
         const result = await fetchImageInBackground(url, referer);
         imageData = result.data;
         contentType = result.contentType;
+        sourceUrl = url;
         break;
       } catch (err) {
         lastError = err;
@@ -246,18 +276,32 @@ async function hoardSaveRemote(message) {
     throw lastError || new Error("Failed to download image");
   }
 
-  const webpB64 = await convertImageDataToWebPBase64(imageData, contentType);
-  const result = await saveViaNativeHost(filename, webpB64, folderKey, message.metadataMissing);
+  const encoded = await encodeImage(imageData, contentType, sourceUrl, settings.format, settings.quality);
+  const pending = {
+    filename: `${baseName}.${encoded.ext}`,
+    data: encoded.data,
+    folderPath: folder.path,
+    folderName: hoardFolderLabel(folder),
+    note: message.metadataMissing ? "Title/year not found; used still id for filename." : "",
+  };
+  const result = await saveViaNativeHost(pending);
 
   if (result.exists) {
     const saveId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    pendingOverwrites.set(saveId, { filename, webpB64, folderKey, metadataMissing: message.metadataMissing });
+    pendingOverwrites.set(saveId, pending);
     // Auto-expire after 2 minutes
     setTimeout(() => pendingOverwrites.delete(saveId), 120000);
-    return { ok: false, exists: true, filename: result.filename, folder: result.folder, saveId };
+    return {
+      ok: false,
+      exists: true,
+      filename: result.filename,
+      folder: result.folder,
+      folderName: pending.folderName,
+      saveId,
+    };
   }
 
-  return result;
+  return { ...result, folderName: pending.folderName };
 }
 
 function enqueueSave(task) {
@@ -266,7 +310,7 @@ function enqueueSave(task) {
   return next;
 }
 
-/** Filename from the image URL, used when the page script is unavailable. */
+/** File base name from the image URL, used when the page script is unavailable. */
 function fallbackFilename(srcUrl, pageUrl) {
   let host = "hoard";
   try {
@@ -285,14 +329,14 @@ function fallbackFilename(srcUrl, pageUrl) {
   } catch {
     base = "";
   }
-  return `${base || `${host}_${Date.now()}`}.webp`;
+  return base || `${host}_${Date.now()}`;
 }
 
 /**
  * Save straight from the background when the tab has no Hoard page script
  * (tab opened before the extension was installed or updated, or a restricted page).
  */
-async function saveWithoutPageScript(info, tab, folderKey) {
+async function saveWithoutPageScript(info, tab, folderId) {
   const srcUrl = info.srcUrl || "";
   if (!/^https?:\/\//i.test(srcUrl)) {
     notify("Hoard save failed", "Reload the page and try again.");
@@ -305,7 +349,7 @@ async function saveWithoutPageScript(info, tab, folderKey) {
         urls: [srcUrl],
         referer: pageUrl,
         filename: fallbackFilename(srcUrl, pageUrl),
-        folderKey,
+        folderId,
       })
     );
     if (result.exists) {
@@ -318,54 +362,141 @@ async function saveWithoutPageScript(info, tab, folderKey) {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create(
-      {
-        id: MENU_CINEMATOGRAPHY,
-        title: "Hoard — Cinematography (H)",
-        contexts: ["image"],
-      },
-      () => void chrome.runtime.lastError
-    );
-    chrome.contextMenus.create(
-      {
-        id: MENU_CONCEPT,
-        title: "Hoard — Concept (H)",
-        contexts: ["image"],
-      },
-      () => void chrome.runtime.lastError
-    );
+function createMenu(props) {
+  return new Promise((resolve) => {
+    chrome.contextMenus.create(props, () => {
+      if (chrome.runtime.lastError) {
+        console.warn("Hoard menu:", chrome.runtime.lastError.message);
+      }
+      resolve();
+    });
   });
+}
+
+/**
+ * Right-click menu: Hoard ▸ one item per folder. Titles start with the shortcut key so
+ * typing it while the submenu is open selects the folder (menu type-ahead).
+ */
+async function buildMenus() {
+  const { folders } = await loadHoardSettings();
+  await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve()));
+  await createMenu({ id: MENU_ROOT, title: "Hoard", contexts: ["image"] });
+  for (const folder of folders) {
+    const key = hoardShortcutLabel(folder.key);
+    await createMenu({
+      id: MENU_FOLDER_PREFIX + folder.id,
+      parentId: MENU_ROOT,
+      title: key ? `${key}   ${hoardFolderLabel(folder)}` : hoardFolderLabel(folder),
+      contexts: ["image"],
+    });
+  }
+  if (folders.length > 0) {
+    await createMenu({
+      id: MENU_SEPARATOR,
+      parentId: MENU_ROOT,
+      type: "separator",
+      contexts: ["image"],
+    });
+  }
+  await createMenu({
+    id: MENU_SETTINGS,
+    parentId: MENU_ROOT,
+    title: folders.length > 0 ? "Hoard settings…" : "Add save folders…",
+    contexts: ["image"],
+  });
+}
+
+function rebuildMenus() {
+  menuChain = menuChain.then(buildMenus, buildMenus).catch((err) => console.error("Hoard menus:", err));
+  return menuChain;
+}
+
+/** First run (or upgrade from fixed folders): seed folders from the bridge's config.py. */
+async function seedFoldersIfNeeded() {
+  const stored = await chrome.storage.local.get("folders");
+  if (Array.isArray(stored.folders)) return;
+
+  const response = await sendToBridge({ action: "defaults" });
+  const defaults = response.ok && Array.isArray(response.folders) ? response.folders : [];
+  const folders = defaults.map((folder, i) => ({
+    id: crypto.randomUUID(),
+    name: folder.name || `Folder ${i + 1}`,
+    path: folder.path || "",
+    key: i < 9 ? String(i + 1) : "",
+  }));
+  await chrome.storage.local.set({
+    folders,
+    format: HOARD_DEFAULT_FORMAT,
+    quality: HOARD_DEFAULT_QUALITY,
+  });
+  if (folders.length === 0) {
+    chrome.runtime.openOptionsPage();
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  seedFoldersIfNeeded()
+    .catch((err) => console.error("Hoard setup:", err))
+    .finally(() => rebuildMenus());
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void rebuildMenus();
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.folders) {
+    void rebuildMenus();
+  }
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  const folderKey = MENU_FOLDERS[info.menuItemId];
-  if (!folderKey) return;
-
-  chrome.storage.local.set({ lastFolderKey: folderKey }).catch(() => {});
+  if (info.menuItemId === MENU_SETTINGS) {
+    chrome.runtime.openOptionsPage();
+    return;
+  }
+  const id = String(info.menuItemId);
+  if (!id.startsWith(MENU_FOLDER_PREFIX)) return;
+  const folderId = id.slice(MENU_FOLDER_PREFIX.length);
 
   if (!tab?.id || tab.id < 0) {
-    void saveWithoutPageScript(info, tab, folderKey);
+    void saveWithoutPageScript(info, tab, folderId);
     return;
   }
 
   chrome.tabs.sendMessage(
     tab.id,
-    { action: "hoardSave", srcUrl: info.srcUrl || "", folderKey },
+    { action: "hoardSave", srcUrl: info.srcUrl || "", folderId },
     { frameId: info.frameId || 0 },
     () => {
       if (chrome.runtime.lastError) {
-        void saveWithoutPageScript(info, tab, folderKey);
+        void saveWithoutPageScript(info, tab, folderId);
       }
     }
   );
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "showResult") {
     if (message.result) handleSaveResult(message.result);
     return false;
+  }
+
+  if (message.action === "openSettings") {
+    chrome.runtime.openOptionsPage();
+    return false;
+  }
+
+  if (message.action === "bridge") {
+    // Settings page: ping / pickFolder / defaults.
+    const allowed = ["ping", "pickFolder", "defaults"];
+    const fromSettingsPage = sender.url?.startsWith(chrome.runtime.getURL(""));
+    if (!fromSettingsPage || !allowed.includes(message.request?.action)) {
+      sendResponse({ ok: false, error: "Unsupported bridge request." });
+      return false;
+    }
+    sendToBridge(message.request).then(sendResponse);
+    return true;
   }
 
   if (message.action === "hoardSaveRemote") {
@@ -382,10 +513,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true;
     }
     pendingOverwrites.delete(message.saveId);
-    enqueueSave(() =>
-      saveViaNativeHost(pending.filename, pending.webpB64, pending.folderKey, pending.metadataMissing, true)
-    )
-      .then((result) => sendResponse(result))
+    enqueueSave(() => saveViaNativeHost(pending, true))
+      .then((result) => sendResponse({ ...result, folderName: pending.folderName }))
       .catch((err) => sendResponse({ ok: false, error: String(err.message || err) }));
     return true;
   }
@@ -399,8 +528,7 @@ function handleSaveResult(result) {
     return;
   }
   if (result.ok) {
-    let msg = `Saved: ${result.filename || "image"}`;
-    if (result.folder) msg += `\n${result.folder}`;
+    let msg = `Saved to ${result.folderName || "folder"}: ${result.filename || "image"}`;
     if (result.note) msg += ` (${result.note})`;
     notify("Hoard", msg);
   } else {
@@ -432,3 +560,7 @@ function notify(title, message) {
     }
   );
 }
+
+chrome.action.onClicked.addListener(() => {
+  chrome.runtime.openOptionsPage();
+});

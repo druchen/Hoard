@@ -59,7 +59,7 @@ function buildFilename(title, year, stillId) {
   const yearPart = (year || "").replace(/\D/g, "");
   const idPart = sanitizePart(stillId);
   if (titlePart && yearPart && idPart) {
-    return `${titlePart}_${yearPart}_${idPart}.webp`;
+    return `${titlePart}_${yearPart}_${idPart}`;
   }
-  return `${idPart || stillId}.webp`;
+  return idPart || stillId;
 }

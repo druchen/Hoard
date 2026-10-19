@@ -13,6 +13,10 @@ $Include = @(
     "hoard-common.js",
     "sd.js",
     "artstation.js",
+    "hoard-settings.js",
+    "options.html",
+    "options.js",
+    "options.css",
     "icon48.png"
 )
 

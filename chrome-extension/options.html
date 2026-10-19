@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hoard settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header>
+      <img src="icon48.png" alt="" width="32" height="32">
+      <div>
+        <h1>Hoard settings</h1>
+        <p class="muted">Changes save automatically.</p>
+      </div>
+      <span id="saved" class="saved" aria-live="polite"></span>
+    </header>
+
+    <section>
+      <div class="bridge" id="bridge">
+        <span class="dot" id="bridge-dot"></span>
+        <span id="bridge-text">Checking native bridge…</span>
+        <button type="button" class="link" id="bridge-check">Check again</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Save folders</h2>
+      <p class="muted">
+        Right-click an image and choose <b>Hoard</b> to pick a folder, or right-click and press <kbd>H</kbd>,
+        then press a folder's shortcut key. Shortcuts are single keys (letters, numbers or symbols).
+      </p>
+      <div class="folders-head" aria-hidden="true">
+        <span>Key</span><span>Name</span><span>Folder path</span><span></span>
+      </div>
+      <ol id="folders" class="folders"></ol>
+      <p id="folders-empty" class="empty" hidden>No folders yet. Add one to start saving.</p>
+      <button type="button" id="add-folder" class="primary">+ Add folder</button>
+    </section>
+
+    <section>
+      <h2>Image format</h2>
+      <div class="formats" id="formats" role="radiogroup" aria-label="Image format"></div>
+      <div class="quality" id="quality-row">
+        <label for="quality">Quality</label>
+        <input type="range" id="quality" min="1" max="100" step="1">
+        <output id="quality-value" for="quality"></output>
+      </div>
+      <p class="muted" id="format-note"></p>
+    </section>
+  </main>
+
+  <template id="folder-row">
+    <li class="folder">
+      <input class="key" type="text" maxlength="1" autocomplete="off" spellcheck="false" aria-label="Shortcut key" placeholder="–">
+      <input class="name" type="text" autocomplete="off" aria-label="Folder name" placeholder="Name">
+      <div class="path-cell">
+        <input class="path" type="text" autocomplete="off" spellcheck="false" aria-label="Folder path" placeholder="C:\Users\you\Pictures\Reference">
+        <button type="button" class="browse">Browse…</button>
+      </div>
+      <div class="row-actions">
+        <button type="button" class="icon up" title="Move up" aria-label="Move up">↑</button>
+        <button type="button" class="icon down" title="Move down" aria-label="Move down">↓</button>
+        <button type="button" class="icon remove" title="Remove" aria-label="Remove">✕</button>
+      </div>
+      <p class="error" hidden></p>
+    </li>
+  </template>
+
+  <script src="hoard-settings.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

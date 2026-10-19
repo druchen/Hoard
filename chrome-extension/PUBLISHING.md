@@ -29,7 +29,7 @@ Copy-paste answers for every field: **[STORE_PRIVACY_ANSWERS.md](STORE_PRIVACY_A
 ## 3. Create the listing
 
 - **Title:** Hoard
-- **Summary:** Save images from the web to local reference folders as WebP. Right-click or press H.
+- **Summary:** Save images from any website to your own folders. Right-click, or press H and a shortcut key.
 - **Description:** See **STORE_PRIVACY_ANSWERS.md** → Store listing text (detailed description).
 - **Host permissions:** Justify `<all_urls>` in the Privacy practices tab using the copy in **STORE_PRIVACY_ANSWERS.md**. Broad host access usually means a longer (in-depth) review, and existing users are asked to re-approve the new permissions when the update installs.
 
