@@ -9,7 +9,7 @@ Also complete **Account Settings** (contact email + verification) — see bottom
 ## Single purpose description
 
 ```
-Hoard saves images from web pages to local reference folders on the user's computer as WebP files. The user initiates each save by right-clicking an image or pressing H after right-click. The extension does not collect analytics or modify unrelated sites.
+Hoard saves images from web pages to local reference folders on the user's computer as WebP files. The user initiates each save by right-clicking an image or pressing H after right-click. The extension does not collect analytics and does not change page content.
 ```
 
 ---
@@ -19,19 +19,25 @@ Hoard saves images from web pages to local reference folders on the user's compu
 ### contextMenus
 
 ```
-Adds save menu items when the user right-clicks an image on supported pages (for example, "Hoard — Cinematography (H)" or "Hoard — Concept (H)"). This is how the user starts a save. Menus appear only on supported sites and only for image context.
+Adds save menu items when the user right-clicks an image (for example, "Hoard — Cinematography (H)" or "Hoard — Concept (H)"). This is how the user starts a save. Menus appear only when right-clicking an image.
 ```
 
-### host_permissions — https://shotdeck.com/*
+### host_permissions — <all_urls>
 
 ```
-Required to download image files from pages where the user chooses to save an image, using their browser session. Images are converted to WebP in the browser and passed to a local save helper.
+Hoard lets the user save any image they right-click, on whatever website they are viewing. Images are often served from CDN domains that differ from the page, so the extension needs access to all hosts to download the image file the user selected, using their browser session. The content script only listens for the user's right-click / H key and shows a small save status message; it does not read or change page content otherwise. Nothing is downloaded until the user starts a save.
 ```
 
-### host_permissions — https://*.artstation.com/*
+### declarativeNetRequestWithHostAccess
 
 ```
-Required to download image files from CDN hosts used by supported pages when the user saves an image. Uses the browser session. Images are converted to WebP and passed to a local save helper.
+Many image servers reject downloads that have no Referer header. While Hoard downloads an image the user chose to save, it adds a temporary session rule that sends the page's origin as the Referer for that one request (the same value the browser sends when it displays the image), then removes the rule. No other requests are modified or blocked.
+```
+
+### storage
+
+```
+Remembers which save folder the user last chose from the menu, so the H shortcut saves to the same folder. Stored locally only; no personal data.
 ```
 
 ### nativeMessaging
@@ -92,7 +98,7 @@ Hoard saves images from the web to your local reference folders as WebP files.
 
 How to use:
 1. Install the Hoard native bridge on Windows (see project documentation).
-2. Browse to a supported page in Chrome.
+2. Browse to any website in Chrome.
 3. Right-click an image and choose a Hoard save option — or right-click and press H.
 
 Requires Windows and a one-time native host setup.

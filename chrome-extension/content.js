@@ -1,6 +1,6 @@
-/** Content script: right-click / H hotkey image save. */
+/** Content script: right-click / H hotkey image save on any site. */
 
-let lastContextImageSrc = null;
+let lastContextImg = null;
 let lastContextTime = 0;
 let saveInFlight = false;
 const CONTEXT_HOTKEY_MS = 5000;
@@ -9,96 +9,47 @@ const CONTEXT_MENU_MS = 30000;
 document.addEventListener(
   "contextmenu",
   (e) => {
-    const img = e.target.closest?.("img");
+    const img = imageAtPoint(e);
     if (img) {
-      const resolved =
-        (typeof bestUrlFromArtStationImage === "function"
-          ? bestUrlFromArtStationImage(img)
-          : null) ||
-        img.currentSrc ||
-        img.src ||
-        null;
-      if (resolved) {
-        lastContextImageSrc = resolved;
-        lastContextTime = Date.now();
-      }
+      lastContextImg = img;
+      lastContextTime = Date.now();
     }
   },
   true
 );
 
 document.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() !== "h" || e.ctrlKey || e.altKey || e.metaKey) {
+  if (e.key?.toLowerCase() !== "h" || e.ctrlKey || e.altKey || e.metaKey) {
     return;
   }
-  if (e.target.closest("input, textarea, [contenteditable=true]")) {
+  if (e.target.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])")) {
     return;
   }
-  if (!lastContextImageSrc || Date.now() - lastContextTime > CONTEXT_HOTKEY_MS) {
-    showHoardToast(
-      "Hoard",
-      "Right-click an image first, then press H within 5 seconds.",
-      true
-    );
+  if (!lastContextTime || Date.now() - lastContextTime > CONTEXT_HOTKEY_MS) {
+    // Only nag when the user just right-clicked something; plain "h" typing elsewhere stays silent.
     return;
   }
   e.preventDefault();
-  void runSave(lastContextImageSrc, hoardIsArtStationPage() ? "concept" : "cinematography");
+  const img = lastContextImg;
+  lastContextTime = 0;
+  // folderKey null → background picks the site default or the last folder used.
+  void runSave(img.currentSrc || img.src || "", img, null);
 });
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action !== "hoardSave") {
     return false;
   }
 
-  void runSave(
-    pickContextSaveUrl(message.srcUrl),
-    message.folderKey || "cinematography"
-  );
-
+  const recent =
+    lastContextImg && Date.now() - lastContextTime < CONTEXT_MENU_MS ? lastContextImg : null;
+  const img = findImageForUrl(message.srcUrl) || recent;
+  void runSave(message.srcUrl || img?.currentSrc || img?.src || "", img, message.folderKey);
+  sendResponse({ received: true });
   return false;
 });
 
-function getRecentContextImageSrc() {
-  if (lastContextImageSrc && Date.now() - lastContextTime < CONTEXT_MENU_MS) {
-    return lastContextImageSrc;
-  }
-  return null;
-}
-
-function pickContextSaveUrl(menuSrcUrl) {
-  if (menuSrcUrl) {
-    if (typeof resolveArtStationImageUrl === "function") {
-      const resolved = resolveArtStationImageUrl(menuSrcUrl);
-      if (
-        resolved &&
-        typeof isArtStationImageUrl === "function" &&
-        isArtStationImageUrl(resolved)
-      ) {
-        return resolved;
-      }
-    }
-
-    if (/^https?:\/\//i.test(menuSrcUrl)) {
-      return menuSrcUrl;
-    }
-
-    const recentContext = getRecentContextImageSrc();
-    if (
-      recentContext &&
-      /^https?:\/\//i.test(recentContext) &&
-      (menuSrcUrl.startsWith("blob:") || menuSrcUrl.startsWith("data:"))
-    ) {
-      return recentContext;
-    }
-
-    return menuSrcUrl;
-  }
-
-  return getRecentContextImageSrc() || "";
-}
-
-async function runSave(srcUrl, folderKey) {
+async function runSave(srcUrl, img, folderKey) {
   if (saveInFlight) {
     showHoardToast("Hoard", "Already saving. Please wait...", true);
     return;
@@ -108,27 +59,49 @@ async function runSave(srcUrl, folderKey) {
   showHoardToast("Hoard", "Saving...", false);
 
   try {
-    const result = await hoardSaveFromImage(srcUrl, folderKey);
+    const request = await buildSaveRequest(srcUrl, img);
+    const result = request.error
+      ? { ok: false, error: request.error }
+      : await requestBackgroundSave({ ...request, folderKey, referer: location.href });
     reportSaveResult(result);
   } catch (err) {
-    reportSaveResult({ ok: false, error: String(err) });
+    reportSaveResult({ ok: false, error: String(err?.message || err) });
   } finally {
     saveInFlight = false;
   }
 }
 
-async function hoardSaveFromImage(srcUrl, folderKey) {
+/** Work out which URLs to download (best first) and what to call the file. */
+async function buildSaveRequest(srcUrl, img) {
+  let request = null;
   if (hoardIsShotdeckPage()) {
-    return hoardSaveShotdeck(srcUrl, folderKey);
+    request = shotdeckSaveRequest(srcUrl, img);
+  } else if (hoardIsArtStationPage()) {
+    request = artStationSaveRequest(srcUrl, img);
   }
-  if (hoardIsArtStationPage()) {
-    return hoardSaveArtStation(srcUrl, folderKey);
+  if (!request) {
+    const candidates = genericImageCandidates(srcUrl, img);
+    request = {
+      urls: candidates,
+      filename: filenameFromImageUrl(candidates.find(isRemoteUrl) || srcUrl),
+    };
   }
-  return { ok: false, error: "Unsupported site." };
+
+  const remote = request.urls.filter(isRemoteUrl);
+  if (remote.length > 0) {
+    return { ...request, urls: remote };
+  }
+
+  // blob:/data: images only exist inside this page, so read them here.
+  const inline = request.urls.find(isInlineUrl);
+  if (inline) {
+    return { ...request, urls: [], ...(await readInlineImage(inline)) };
+  }
+  return { error: "Could not find an image URL. Right-click directly on the image." };
 }
 
-async function hoardSaveShotdeck(srcUrl, folderKey) {
-  let stillId = parseStillId(srcUrl);
+function shotdeckSaveRequest(srcUrl, img) {
+  let stillId = parseStillId(srcUrl) || parseStillId(img?.currentSrc || img?.src);
   if (!stillId) {
     const modalImg = document.querySelector(
       '#shotModal img[src*="shotdeck.com"], .modal img[src*="stills"]'
@@ -138,63 +111,27 @@ async function hoardSaveShotdeck(srcUrl, folderKey) {
     }
   }
   if (!stillId) {
-    return { ok: false, error: "Could not find still id from image URL." };
+    return null;
   }
 
   const { title, year } = readMetadata();
-  const filename = buildFilename(title, year, stillId);
-  const imageUrl = fullSizeUrl(stillId);
-
-  try {
-    const blob = await fetchImageBlob(imageUrl, "https://shotdeck.com/");
-    const webpBlob = await convertToWebP(blob);
-    const base64 = await blobToBase64(webpBlob);
-    const result = await saveViaNativeBridge({
-      filename,
-      data: base64,
-      folderKey,
-      metadataMissing: !(title && year),
-    });
-    return result;
-  } catch (err) {
-    return {
-      ok: false,
-      error: `${err.message}. Are you logged in to this site?`,
-    };
-  }
+  return {
+    urls: [fullSizeUrl(stillId), srcUrl],
+    filename: buildFilename(title, year, stillId),
+    metadataMissing: !(title && year),
+  };
 }
 
-async function hoardSaveArtStation(srcUrl, folderKey) {
-  const resolvedUrl = resolveArtStationImageUrl(srcUrl);
-  if (!resolvedUrl || !isArtStationImageUrl(resolvedUrl)) {
-    return {
-      ok: false,
-      error: "Not a supported image URL. Right-click directly on the artwork image.",
-    };
+function artStationSaveRequest(srcUrl, img) {
+  const upgraded = bestUrlFromArtStationImage(img);
+  const resolved =
+    upgraded && isRemoteUrl(upgraded) ? upgraded : resolveArtStationImageUrl(srcUrl);
+  if (!resolved || !isArtStationImageUrl(resolved)) {
+    return null;
   }
-
-  const referer = location.href || "https://www.artstation.com/";
-  const candidates = artStationDownloadCandidates(resolvedUrl);
-  const filename = filenameFromArtStationUrl(
-    candidates.find((url) => /^https?:\/\//i.test(url)) || resolvedUrl
-  );
-  const remoteCandidates = candidates.filter((url) => /^https?:\/\//i.test(url));
-
-  if (remoteCandidates.length > 0) {
-    return requestBackgroundSave({
-      urls: remoteCandidates,
-      referer,
-      filename,
-      folderKey,
-    });
-  }
-
-  try {
-    const blob = await fetchImageBlobCandidates(candidates, referer);
-    const webpBlob = await convertToWebP(blob);
-    const base64 = await blobToBase64(webpBlob);
-    return await saveViaNativeBridge({ filename, data: base64, folderKey });
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  const candidates = artStationDownloadCandidates(resolved);
+  return {
+    urls: [...candidates, srcUrl],
+    filename: filenameFromArtStationUrl(candidates.find(isRemoteUrl) || resolved),
+  };
 }

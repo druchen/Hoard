@@ -31,7 +31,7 @@ Copy-paste answers for every field: **[STORE_PRIVACY_ANSWERS.md](STORE_PRIVACY_A
 - **Title:** Hoard
 - **Summary:** Save images from the web to local reference folders as WebP. Right-click or press H.
 - **Description:** See **STORE_PRIVACY_ANSWERS.md** → Store listing text (detailed description).
-- **Host permissions:** Justify each declared host in the Privacy practices tab using the generic copy in **STORE_PRIVACY_ANSWERS.md** (do not name specific sites in the public listing).
+- **Host permissions:** Justify `<all_urls>` in the Privacy practices tab using the copy in **STORE_PRIVACY_ANSWERS.md**. Broad host access usually means a longer (in-depth) review, and existing users are asked to re-approve the new permissions when the update installs.
 
 ## 4. After approval
 

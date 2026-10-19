@@ -21,7 +21,7 @@ if (-not (Test-Path $BatPath)) {
 $BatContent = @"
 @echo off
 cd /d "$ProjectRoot"
-python -m hoard_sd.native_bridge
+python -m hoard.native_bridge
 "@
 Set-Content -Path $BatPath -Value $BatContent -Encoding ASCII
 

@@ -30,16 +30,6 @@ function fullSizeUrl(stillId) {
   return `https://${SD_SITE_HOST}/assets/images/stills/${stillId}.jpg`;
 }
 
-function sanitizePart(text) {
-  if (!text) return "";
-  return text
-    .trim()
-    .replace(/\s+/g, "_")
-    .replace(/[<>:"/\\|?*]/g, "")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "");
-}
-
 /** Remove trailing "(2015)" / "[2015]" so year is not duplicated in the filename. */
 function stripYearFromTitle(title) {
   return title

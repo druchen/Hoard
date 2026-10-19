@@ -6,7 +6,7 @@ import os
 import struct
 import sys
 
-from hoard_sd.bridge_config import resolve_save_folder
+from hoard.bridge_config import resolve_save_folder
 
 
 def _read_message():

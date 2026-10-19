@@ -15,7 +15,7 @@ EXT_ID="${1:-}"
 cat > "$LAUNCHER" <<EOF
 #!/bin/bash
 cd "$PROJECT_ROOT"
-exec python3 -m hoard_sd.native_bridge
+exec python3 -m hoard.native_bridge
 EOF
 chmod +x "$LAUNCHER"
 
@@ -70,4 +70,4 @@ echo "Native host installed:"
 echo "  $DEST"
 echo "  Launcher: $LAUNCHER"
 echo ""
-echo "Next: Right-click an image on a supported page → Hoard save option (H)."
+echo "Next: Right-click an image on any website → Hoard save option (H)."

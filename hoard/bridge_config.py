@@ -2,7 +2,7 @@
 
 import os
 
-from hoard_sd.config import save_folder
+from hoard.config import save_folder
 
 
 def resolve_save_folder(message=None):

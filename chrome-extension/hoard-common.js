@@ -1,6 +1,4 @@
-/** Shared fetch, WebP conversion, and native bridge helpers. */
-
-const WEBP_QUALITY = 0.8;
+/** Shared content-script helpers: site detection, toasts, image URL and filename helpers. */
 
 function hoardIsShotdeckPage() {
   const host = location.hostname;
@@ -11,6 +9,7 @@ function hoardIsArtStationPage() {
   const host = location.hostname;
   return host === "artstation.com" || host.endsWith(".artstation.com");
 }
+
 const HOARD_TOAST_ID = "hoard-save-toast";
 
 function showHoardToast(title, message, isError) {
@@ -185,47 +184,12 @@ function showHoardOverwriteDialog(result) {
   overwriteBtn.focus();
 }
 
-function convertToWebP(blob, quality = WEBP_QUALITY) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      canvas.toBlob(
-        (webp) => {
-          if (webp) resolve(webp);
-          else reject(new Error("WebP conversion failed"));
-        },
-        "image/webp",
-        quality
-      );
-    };
-    img.onerror = () => reject(new Error("Failed to decode image"));
-    img.src = URL.createObjectURL(blob);
-  });
-}
-
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result.split(",")[1]);
     reader.onerror = reject;
     reader.readAsDataURL(blob);
-  });
-}
-
-function saveViaNativeBridge(payload) {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: "nativeSave", ...payload }, (result) => {
-      if (chrome.runtime.lastError) {
-        resolve({ ok: false, error: chrome.runtime.lastError.message });
-        return;
-      }
-      resolve(result);
-    });
   });
 }
 
@@ -241,7 +205,12 @@ function requestBackgroundSave(payload, timeoutMs = 120000) {
     chrome.runtime.sendMessage({ action: "hoardSaveRemote", ...payload }, (result) => {
       clearTimeout(timeout);
       if (chrome.runtime.lastError) {
-        resolve({ ok: false, error: chrome.runtime.lastError.message });
+        resolve({
+          ok: false,
+          error:
+            chrome.runtime.lastError.message +
+            " Reload the page after updating the extension.",
+        });
         return;
       }
       resolve(result || { ok: false, error: "No response from background save." });
@@ -249,79 +218,121 @@ function requestBackgroundSave(payload, timeoutMs = 120000) {
   });
 }
 
-const IMAGE_URL_EXT = /\.(jpe?g|png|gif|webp|avif)(\?|#|$)/i;
-
-function isImageResponse(contentType, url) {
-  const type = (contentType || "").toLowerCase();
-  if (type.includes("svg")) {
-    return false;
-  }
-  if (!type || type.includes("octet-stream")) {
-    return IMAGE_URL_EXT.test(url || "");
-  }
-  return type.includes("image");
-}
-
-function shouldFetchImageInBackground(url) {
+function isRemoteUrl(url) {
   return /^https?:\/\//i.test(url || "");
 }
 
-function base64ToBlob(base64, contentType) {
-  const raw = atob(base64);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) {
-    bytes[i] = raw.charCodeAt(i);
-  }
-  return new Blob([bytes], { type: contentType || "image/jpeg" });
+function isInlineUrl(url) {
+  return /^(blob|data):/i.test(url || "");
 }
 
-async function fetchImageBlobViaBackground(url, referer) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ action: "fetchImage", url, referer }, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      if (!response?.ok) {
-        const detail = response?.url ? `\n${response.url}` : "";
-        reject(new Error((response?.error || "Failed to download image") + detail));
-        return;
-      }
-      resolve(base64ToBlob(response.data, response.contentType));
-    });
-  });
-}
-
-async function fetchImageBlobLocal(url, referer) {
-  const response = await fetch(url, {
-    credentials: "include",
-    headers: referer ? { Referer: referer } : {},
-  });
+/** Read a blob: or data: image URL in the page so the background can save it. */
+async function readInlineImage(url) {
+  const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to download image (${response.status})`);
+    throw new Error(`Failed to read image (${response.status})`);
   }
-  const contentType = response.headers.get("Content-Type") || "";
-  if (!isImageResponse(contentType, url)) {
-    throw new Error("URL did not return a supported image");
-  }
-  return response.blob();
+  const blob = await response.blob();
+  return { data: await blobToBase64(blob), contentType: blob.type };
 }
 
-async function fetchImageBlob(url, referer) {
-  if (shouldFetchImageInBackground(url)) {
-    return fetchImageBlobViaBackground(url, referer);
-  }
-  return fetchImageBlobLocal(url, referer);
+function sanitizePart(text) {
+  if (!text) return "";
+  return text
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 150);
 }
 
-async function fetchImageBlobCandidates(urls, referer) {
-  let lastError = null;
-  for (const url of urls) {
-    try {
-      return await fetchImageBlob(url, referer);
-    } catch (err) {
-      lastError = err;
+function urlsMatch(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  try {
+    const pa = new URL(a, location.href);
+    const pb = new URL(b, location.href);
+    return pa.origin === pb.origin && pa.pathname === pb.pathname;
+  } catch {
+    return false;
+  }
+}
+
+/** Find the page <img> whose source matches the URL Chrome passed from the context menu. */
+function findImageForUrl(srcUrl) {
+  if (!srcUrl) return null;
+  for (const img of document.querySelectorAll("img")) {
+    const sources = [img.currentSrc, img.src, img.getAttribute("data-src")].filter(Boolean);
+    if (sources.some((source) => urlsMatch(source, srcUrl))) {
+      return img;
     }
   }
-  throw lastError || new Error("Failed to download image");
+  return null;
+}
+
+/** The <img> under the pointer, even when the site covers it with an overlay. */
+function imageAtPoint(event) {
+  const direct = event.target?.closest?.("img");
+  if (direct) return direct;
+  const stack = document.elementsFromPoint?.(event.clientX, event.clientY) || [];
+  return stack.find((el) => el.tagName === "IMG") || null;
+}
+
+/** Largest srcset entry (by width or density descriptor). */
+function largestSrcsetUrl(img) {
+  const srcset = img?.getAttribute("srcset");
+  if (!srcset) return null;
+  const best = srcset
+    .split(",")
+    .map((part) => part.trim().split(/\s+/))
+    .filter((parts) => parts[0])
+    .map(([url, descriptor]) => [url, parseFloat(descriptor || "0") || 0])
+    .sort((a, b) => b[1] - a[1])[0];
+  if (!best) return null;
+  try {
+    return new URL(best[0], location.href).href;
+  } catch {
+    return null;
+  }
+}
+
+/** Candidate URLs to try for a generic site, highest resolution first. */
+function genericImageCandidates(srcUrl, img) {
+  const candidates = [];
+  for (const url of [
+    largestSrcsetUrl(img),
+    img?.currentSrc,
+    srcUrl,
+    img?.src,
+    img?.getAttribute("data-src"),
+  ]) {
+    if (url && !candidates.includes(url)) {
+      candidates.push(url);
+    }
+  }
+  return candidates;
+}
+
+const GENERIC_NAME = /^(image|img|photo|picture|original|orig|download|file|media|default|index|full|large|medium|small|thumb|[0-9]{1,6})$/i;
+
+/** Filename from image URL path, e.g. .../my-piece.jpg → my-piece.webp */
+function filenameFromImageUrl(url) {
+  const host = sanitizePart(location.hostname.replace(/^www\./, ""));
+  let base = "";
+  try {
+    const parsed = new URL(url, location.href);
+    if (isRemoteUrl(parsed.href)) {
+      const last = parsed.pathname.split("/").filter(Boolean).pop() || "";
+      base = sanitizePart(decodeURIComponent(last).replace(/\.[^.]+$/, ""));
+    }
+  } catch {
+    base = "";
+  }
+  if (!base) {
+    base = `${host || "hoard"}_${Date.now()}`;
+  } else if (GENERIC_NAME.test(base)) {
+    base = `${host}_${base}`;
+  }
+  return `${base}.webp`;
 }

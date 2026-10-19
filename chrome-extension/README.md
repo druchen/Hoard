@@ -9,7 +9,7 @@
 
 ## Usage
 
-Right-click an image → choose a Hoard save option, or right-click and press **H** within 5 seconds.
+Works on any website. Right-click an image → choose a Hoard save option, or right-click and press **H** within 5 seconds (H uses the site default on ShotDeck/ArtStation, otherwise the folder you last picked).
 
 Images are fetched at full size when possible, converted to WebP, and written via the native bridge.
 

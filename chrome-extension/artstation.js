@@ -1,14 +1,8 @@
 /** ArtStation URL and filename helpers. */
 
-const ARTSTATION_HOST = "artstation.com";
 const ARTSTATION_CDN = /artstation\.com\/p\/assets\/images/i;
 const ARTSTATION_IMAGE_HOST = /\.artstation\.com$/i;
 const ARTSTATION_SIZE_SEGMENT = /\/(small|medium|large|4k)\//i;
-
-function isArtStationPage() {
-  const host = location.hostname;
-  return host === ARTSTATION_HOST || host.endsWith("." + ARTSTATION_HOST);
-}
 
 function isArtStationImageUrl(url) {
   if (!url) return false;
@@ -129,16 +123,6 @@ function resolveArtStationImageUrl(srcUrl) {
   }
 
   return srcUrl;
-}
-
-function sanitizePart(text) {
-  if (!text) return "";
-  return text
-    .trim()
-    .replace(/\s+/g, "_")
-    .replace(/[<>:"/\\|?*]/g, "")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "");
 }
 
 /** Filename from image URL path, e.g. .../large/my-piece.jpg → my-piece.webp */
