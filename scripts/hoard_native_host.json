@@ -1,0 +1,10 @@
+﻿{
+    "name":  "com.hoard.bridge",
+    "description":  "Hoard native bridge for Chrome extension",
+    "path":  "C:\\Users\\drew\\Documents\\DIY_Apps\\Hoard_ChromeExtension\\scripts\\hoard_native.bat",
+    "type":  "stdio",
+    "allowed_origins":  [
+                            "chrome-extension://ajomjmgnleomokbmfnjfcpjlmiecpfca/",
+                            "chrome-extension://jjfdmmccodbdjfcppkjmncbilpgehhgk/"
+                        ]
+}

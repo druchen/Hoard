@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Hoard",
+  "short_name": "Hoard",
+  "version": "1.2.7",
+  "description": "Save images from the web to your local reference folders as WebP. Right-click an image or press H.",
+  "permissions": [
+    "contextMenus",
+    "nativeMessaging",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://shotdeck.com/*",
+    "https://*.artstation.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon48.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://shotdeck.com/*"],
+      "js": ["hoard-common.js", "sd.js", "content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.artstation.com/*",
+        "*://artstation.com/*"
+      ],
+      "js": ["hoard-common.js", "artstation.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApU9Qc4nw5ATALaCd26dG+AGfDV17GlpYgf1Ms7n22DVLufEZp1YsMMwHoyic6zYjs+yJJXYADvTUkSpIoHEW+QpK3f4CNHPOzsJQtvDJ0IUaIVtAlOhAPUq+4M7VWa5jBsltGsraNfMifkqorrxHD2VYIhudcoYb79tVMSUP6I2QIas/pLT/JWEbtWuTiiEmrIh/PERbmHFm9tkCPtYayv45aPMsFnWpWYMBJ0JbdN9JjEl4zF8X7Do6pPZ/eIYXKjzG4/dIUUbVAhKlnzQJTXQLDK74DP9pJkLnPV/dpK+d2UQ3uiMgcmAhu//miqUoD/1nxsjf4v2H69qLvyAQiwIDAQAB"
+}
