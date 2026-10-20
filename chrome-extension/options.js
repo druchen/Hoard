@@ -1,4 +1,4 @@
-/** Hoard settings page: save folders with shortcut keys, image format and quality. */
+/** Hoard settings page: save folders with shortcut keys, image format, quality, notifications. */
 
 const ABSOLUTE_PATH = /^(?:[a-zA-Z]:[\\/]|\\\\|\/|~[\\/]?)/;
 const SAVE_DELAY_MS = 300;
@@ -32,6 +32,8 @@ async function save() {
     folders: settings.folders.map(normalizeHoardFolder),
     format: settings.format,
     quality: settings.quality,
+    pageNotifications: settings.pageNotifications,
+    systemNotifications: settings.systemNotifications,
   });
   const saved = $("saved");
   saved.textContent = "Saved";
@@ -156,12 +158,26 @@ function renderFolders(focusId, focusField = "name") {
       }
     });
 
-    const up = row.querySelector(".up");
-    const down = row.querySelector(".down");
-    up.disabled = index === 0;
-    down.disabled = index === settings.folders.length - 1;
-    up.addEventListener("click", () => moveFolder(index, -1));
-    down.addEventListener("click", () => moveFolder(index, 1));
+    const handle = row.querySelector(".handle");
+    // Rows are only draggable while the handle is held, so text in the inputs stays selectable.
+    handle.addEventListener("pointerdown", () => (row.draggable = true));
+    handle.addEventListener("pointerup", () => (row.draggable = false));
+    handle.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        moveFolder(index, e.key === "ArrowUp" ? -1 : 1);
+      }
+    });
+    row.addEventListener("dragstart", (e) => {
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", folder.id);
+    });
+    row.addEventListener("dragend", () => {
+      row.draggable = false;
+      row.classList.remove("dragging");
+      applyDomOrder();
+    });
     row.querySelector(".remove").addEventListener("click", () => {
       settings.folders.splice(index, 1);
       renderFolders();
@@ -174,8 +190,31 @@ function renderFolders(focusId, focusField = "name") {
     }
   });
 
-  $("folders-empty").hidden = settings.folders.length > 0;
   showValidation();
+}
+
+/** While dragging, move the dragged row before/after the row under the cursor. */
+function onFolderDragOver(e) {
+  const list = $("folders");
+  const dragging = list.querySelector(".folder.dragging");
+  if (!dragging) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  const over = e.target.closest?.(".folder");
+  if (!over || over === dragging) return;
+  const rect = over.getBoundingClientRect();
+  const after = e.clientY > rect.top + rect.height / 2;
+  list.insertBefore(dragging, after ? over.nextSibling : over);
+}
+
+function applyDomOrder() {
+  const order = [...$("folders").children].map((row) => row.dataset.id);
+  const changed = order.some((id, i) => settings.folders[i]?.id !== id);
+  if (!changed) return;
+  const byId = new Map(settings.folders.map((f) => [f.id, f]));
+  settings.folders = order.map((id) => byId.get(id)).filter(Boolean);
+  renderFolders();
+  void save();
 }
 
 function moveFolder(index, delta) {
@@ -183,7 +222,7 @@ function moveFolder(index, delta) {
   if (target < 0 || target >= settings.folders.length) return;
   const [folder] = settings.folders.splice(index, 1);
   settings.folders.splice(target, 0, folder);
-  renderFolders(folder.id, delta < 0 ? "up" : "down");
+  renderFolders(folder.id, "handle");
   void save();
 }
 
@@ -202,7 +241,7 @@ function renderFormats() {
       updateQualityState();
       void save();
     });
-    label.append(input, document.createTextNode(format.label + (value === HOARD_DEFAULT_FORMAT ? " (default)" : "")));
+    label.append(input, document.createTextNode(format.label));
     container.appendChild(label);
   }
   updateQualityState();
@@ -214,13 +253,6 @@ function updateQualityState() {
   slider.disabled = !format.lossy;
   $("quality-row").classList.toggle("disabled", !format.lossy);
   $("quality-value").textContent = String(settings.quality);
-  const notes = {
-    webp: "Small files with good quality. Images that are already WebP are saved unchanged.",
-    jpeg: "Widely compatible. Transparent areas become white. Images that are already JPEG are saved unchanged.",
-    png: "Lossless and larger. Quality does not apply.",
-    original: "Saves the downloaded file exactly as the site serves it. Quality does not apply.",
-  };
-  $("format-note").textContent = notes[settings.format] || "";
 }
 
 async function checkBridge() {
@@ -253,6 +285,19 @@ async function init() {
     void save();
   });
   $("bridge-check").addEventListener("click", checkBridge);
+  $("folders").addEventListener("dragover", onFolderDragOver);
+  $("folders").addEventListener("drop", (e) => e.preventDefault());
+  for (const [id, key] of [
+    ["page-notifications", "pageNotifications"],
+    ["system-notifications", "systemNotifications"],
+  ]) {
+    const box = $(id);
+    box.checked = settings[key];
+    box.addEventListener("change", () => {
+      settings[key] = box.checked;
+      void save();
+    });
+  }
   window.addEventListener("beforeunload", () => {
     if (saveTimer) void save();
   });

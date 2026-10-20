@@ -433,7 +433,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-function handleSaveResult(result) {
+async function handleSaveResult(result) {
+  const { systemNotifications } = await loadHoardSettings();
+  if (!systemNotifications) return;
   if (!result) {
     notify("Hoard save failed", "No response from page script.");
     return;
@@ -452,7 +454,7 @@ function notify(title, message) {
   const safeMessage = String(message || "").trim();
   if (!safeMessage) return;
 
-  const iconUrl = chrome.runtime.getURL("icon48.png");
+  const iconUrl = chrome.runtime.getURL("icons/hoard_icon_128.png");
   chrome.notifications.create(
     {
       type: "basic",

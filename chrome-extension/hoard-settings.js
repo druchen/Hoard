@@ -4,7 +4,7 @@ const HOARD_FORMATS = {
   webp: { label: "WebP", mime: "image/webp", ext: "webp", lossy: true },
   jpeg: { label: "JPEG", mime: "image/jpeg", ext: "jpg", lossy: true },
   png: { label: "PNG", mime: "image/png", ext: "png", lossy: false },
-  original: { label: "Original (no conversion)", mime: null, ext: null, lossy: false },
+  original: { label: "Original", mime: null, ext: null, lossy: false },
 };
 const HOARD_DEFAULT_FORMAT = "webp";
 const HOARD_DEFAULT_QUALITY = 85;
@@ -24,11 +24,17 @@ function normalizeHoardFolder(folder) {
   };
 }
 
-/** { folders: [{ id, name, path, key }], format, quality } */
+/** { folders: [{ id, name, path, key }], format, quality, pageNotifications, systemNotifications } */
 async function loadHoardSettings() {
   let stored = {};
   try {
-    stored = await chrome.storage.local.get(["folders", "format", "quality"]);
+    stored = await chrome.storage.local.get([
+      "folders",
+      "format",
+      "quality",
+      "pageNotifications",
+      "systemNotifications",
+    ]);
   } catch {
     stored = {};
   }
@@ -38,6 +44,8 @@ async function loadHoardSettings() {
       .filter((folder) => folder.id),
     format: HOARD_FORMATS[stored.format] ? stored.format : HOARD_DEFAULT_FORMAT,
     quality: clampHoardQuality(stored.quality ?? HOARD_DEFAULT_QUALITY),
+    pageNotifications: stored.pageNotifications !== false,
+    systemNotifications: stored.systemNotifications !== false,
   };
 }
 

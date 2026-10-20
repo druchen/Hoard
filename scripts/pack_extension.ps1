@@ -16,8 +16,13 @@ $Include = @(
     "hoard-settings.js",
     "options.html",
     "options.js",
-    "options.css",
-    "icon48.png"
+    "options.css"
+)
+$IncludeIcons = @(
+    "hoard_icon_16.png",
+    "hoard_icon_32.png",
+    "hoard_icon_48.png",
+    "hoard_icon_128.png"
 )
 
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
@@ -33,6 +38,16 @@ foreach ($file in $Include) {
         Write-Error "Missing required file: $src"
     }
     Copy-Item $src -Destination $Stage
+}
+
+$IconStage = Join-Path $Stage "icons"
+New-Item -ItemType Directory -Path $IconStage | Out-Null
+foreach ($file in $IncludeIcons) {
+    $src = Join-Path $ExtDir "icons\$file"
+    if (-not (Test-Path $src)) {
+        Write-Error "Missing required icon: $src"
+    }
+    Copy-Item $src -Destination $IconStage
 }
 
 # Manifest without "key" (Web Store assigns its own signing key / extension ID)

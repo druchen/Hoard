@@ -55,7 +55,7 @@ After the user saves an image, the extension sends the image bytes to a register
 ### notifications
 
 ```
-Shows a brief success or error notification after each save attempt (for example, a saved filename or a message if the native bridge is not installed). Notifications are optional feedback only; no personal data is included in the notification text.
+Shows a brief success or error notification after each save attempt (for example, a saved filename or a message if the native bridge is not installed). Users can turn system notifications off in Hoard settings. Notifications are optional feedback only; no personal data is included in the notification text.
 ```
 
 ### Remote code use

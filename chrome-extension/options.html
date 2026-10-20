@@ -4,16 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hoard settings</title>
+  <link rel="icon" href="icons/hoard_icon_32.png">
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <main>
     <header>
-      <img src="icon48.png" alt="" width="32" height="32">
-      <div>
-        <h1>Hoard settings</h1>
-        <p class="muted">Changes save automatically.</p>
-      </div>
+      <img src="icons/hoard_icon_128.png" alt="" width="40" height="40">
+      <h1>Hoard settings</h1>
       <span id="saved" class="saved" aria-live="polite"></span>
     </header>
 
@@ -27,15 +25,10 @@
 
     <section>
       <h2>Save folders</h2>
-      <p class="muted">
-        Right-click an image and choose <b>Hoard</b> (or press <kbd>H</kbd>). A menu of these folders opens at the
-        cursor: click one or press its shortcut key. Shortcuts are single keys (letters, numbers or symbols).
-      </p>
       <div class="folders-head" aria-hidden="true">
-        <span>Key</span><span>Name</span><span>Folder path</span><span></span>
+        <span></span><span>Key</span><span>Name</span><span>Folder path</span><span></span>
       </div>
       <ol id="folders" class="folders"></ol>
-      <p id="folders-empty" class="empty" hidden>No folders yet. Add one to start saving.</p>
       <button type="button" id="add-folder" class="primary">+ Add folder</button>
     </section>
 
@@ -47,23 +40,43 @@
         <input type="range" id="quality" min="1" max="100" step="1">
         <output id="quality-value" for="quality"></output>
       </div>
-      <p class="muted" id="format-note"></p>
+    </section>
+
+    <section>
+      <h2>Notifications</h2>
+      <label class="toggle">
+        <input type="checkbox" id="page-notifications">
+        <span>Page notification</span>
+      </label>
+      <label class="toggle">
+        <input type="checkbox" id="system-notifications">
+        <span>System notification</span>
+      </label>
     </section>
   </main>
 
   <template id="folder-row">
     <li class="folder">
+      <button type="button" class="handle" title="Drag to reorder" aria-label="Drag to reorder">
+        <svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true">
+          <circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/>
+          <circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/>
+          <circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/>
+        </svg>
+      </button>
       <input class="key" type="text" maxlength="1" autocomplete="off" spellcheck="false" aria-label="Shortcut key" placeholder="–">
       <input class="name" type="text" autocomplete="off" aria-label="Folder name" placeholder="Name">
       <div class="path-cell">
-        <input class="path" type="text" autocomplete="off" spellcheck="false" aria-label="Folder path" placeholder="C:\Users\you\Pictures\Reference">
+        <input class="path" type="text" autocomplete="off" spellcheck="false" aria-label="Folder path" placeholder="Folder path">
         <button type="button" class="browse">Browse…</button>
       </div>
-      <div class="row-actions">
-        <button type="button" class="icon up" title="Move up" aria-label="Move up">↑</button>
-        <button type="button" class="icon down" title="Move down" aria-label="Move down">↓</button>
-        <button type="button" class="icon remove" title="Remove" aria-label="Remove">✕</button>
-      </div>
+      <button type="button" class="icon remove" title="Remove" aria-label="Remove">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+          <path d="M10 11v6"/><path d="M14 11v6"/>
+        </svg>
+      </button>
       <p class="error" hidden></p>
     </li>
   </template>

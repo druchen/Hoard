@@ -12,7 +12,17 @@ function hoardIsArtStationPage() {
 
 const HOARD_TOAST_ID = "hoard-save-toast";
 
+// Bottom-right page notification on/off (Hoard settings), kept in sync with storage.
+let hoardPageToasts = true;
+loadHoardSettings().then((settings) => (hoardPageToasts = settings.pageNotifications));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.pageNotifications) {
+    hoardPageToasts = changes.pageNotifications.newValue !== false;
+  }
+});
+
 function showHoardToast(title, message, isError) {
+  if (!hoardPageToasts) return;
   let el = document.getElementById(HOARD_TOAST_ID);
   if (!el) {
     el = document.createElement("div");

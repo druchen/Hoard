@@ -12,7 +12,7 @@ Sibling project to **[Hoard](../Hoard)** (desktop drag-and-drop app).
 
 If the file already exists, choose **Rename** (a free name is proposed: `image_20261019.webp`, then `image_20261019_01.webp`, `_02`, …), **Overwrite**, or **Cancel**.
 
-Folders, shortcut keys, image format and quality are set on the **Hoard settings** page (click the Hoard toolbar icon, or **Settings** in the folder menu). Add as many folders as you like; **Browse…** opens your system folder picker through the native bridge.
+Folders, shortcut keys, image format, quality and notifications are set on the **Hoard settings** page (click the Hoard toolbar icon, or **Settings** in the folder menu). Add as many folders as you like, drag the handle at the left of a row to reorder them, and use **Browse…** to open your system folder picker through the native bridge. Page notifications (bottom-right of the page) and system notifications can each be turned off.
 
 | Format | Notes |
 |--------|-------|
@@ -20,6 +20,8 @@ Folders, shortcut keys, image format and quality are set on the **Hoard settings
 | JPEG | Quality slider; transparency becomes white |
 | PNG | Lossless |
 | Original | Saves the file exactly as the site serves it |
+
+Icons live in [`chrome-extension/icons/`](chrome-extension/icons/) (16/32/48 px are resized from the 512 px source).
 
 Images already in the chosen format are saved unchanged (no double compression). Images are fetched at the largest size available (ShotDeck full stills, ArtStation 4k, the biggest `srcset` entry elsewhere).
 
