@@ -9,7 +9,7 @@ Also complete **Account Settings** (contact email + verification) — see bottom
 ## Single purpose description
 
 ```
-Hoard saves images from web pages to folders the user chooses on their computer (WebP, JPEG, PNG or the original file). The user initiates each save by right-clicking an image, choosing Hoard (or pressing H), and picking a folder. The extension does not collect analytics and does not change page content.
+Hoard saves images from web pages to folders the user chooses on their computer (WebP, JPEG, PNG or the original file). The user initiates each save by right-clicking an image, choosing Hoard (or pressing H), and picking a folder. The extension does not collect analytics and does not alter the content of websites.
 ```
 
 ---
@@ -25,7 +25,7 @@ Adds a single "Hoard" item when the user right-clicks an image. Choosing it open
 ### host_permissions — <all_urls>
 
 ```
-Hoard lets the user save any image they right-click, on whatever website they are viewing. Images are often served from CDN domains that differ from the page, so the extension needs access to all hosts to download the image file the user selected, using their browser session. The content script only listens for the user's right-click / H key and shows a small save status message; it does not read or change page content otherwise. Nothing is downloaded until the user starts a save.
+Hoard lets the user save any image they right-click, on whatever website they are viewing. Images are often served from CDN domains that differ from the page, so the extension needs access to all hosts to download the image file the user selected, using their browser session. The content script listens for the user's right-click / H key, shows Hoard's folder menu, an "already exists" rename dialog and a small save status message, and reads only the clicked image's address (and, on some sites, the image title) to name the file. It does not change page content, and nothing is downloaded until the user starts a save.
 ```
 
 ### declarativeNetRequestWithHostAccess
@@ -43,7 +43,7 @@ If the user chooses Hoard on a tab that was already open before the extension wa
 ### storage
 
 ```
-Stores the user's Hoard settings: their save folders (name, local path, shortcut key) and preferred image format and quality. Stored locally in the browser only; never transmitted.
+Stores the user's Hoard settings: their save folders (name, local path, shortcut key), preferred image format and quality, and notification preferences. Stored locally in the browser only; never transmitted.
 ```
 
 ### nativeMessaging
@@ -61,7 +61,7 @@ Shows a brief success or error notification after each save attempt (for example
 ### Remote code use
 
 ```
-This extension does not execute remote code. All JavaScript (background, content scripts) is bundled in the package and reviewed as part of the upload. The extension fetches image binary data only when the user explicitly saves an image; it does not download or eval scripts from third-party servers. Native messaging invokes a fixed local executable path registered by the user on Windows; the bridge does not load code from the internet.
+This extension does not execute remote code. All JavaScript (background, content scripts) is bundled in the package and reviewed as part of the upload. The extension fetches image binary data only when the user explicitly saves an image; it does not download or eval scripts from third-party servers. Native messaging invokes a fixed local program registered by the user on Windows or macOS; the bridge does not load code from the internet.
 ```
 
 If the form is a **yes/no** question "Does your extension use remote code?" → answer **No**.
@@ -76,7 +76,7 @@ On the Privacy practices tab, you will certify data handling. For Hoard, select:
 
 | Question | Answer |
 |----------|--------|
-| Collect personal / sensitive user data? | **No** (unless Google forces you to declare image content — if asked about "photos/videos", say processing is **on-device only**, user-initiated, not transmitted to developer servers) |
+| Collect personal / sensitive user data? | **No** — leave every data category unchecked (including "Website content" and "Web history"). Hoard reads the clicked image's address and saves the image on the user's own computer; nothing leaves the device or reaches the developer. |
 | Data sold to third parties? | **No** |
 | Data used for purposes unrelated to the item's single purpose? | **No** |
 | Data transferred to third parties (except service providers)? | **No** |
@@ -103,7 +103,7 @@ Save images from any website to your own folders. Right-click, or press H and a 
 Hoard saves images from any website to folders you choose, as WebP, JPEG, PNG or the original file.
 
 How to use:
-1. Install the Hoard native bridge on Windows (see project documentation).
+1. Install the Hoard native bridge on Windows or macOS (see project documentation).
 2. Browse to any website in Chrome.
 3. Add your save folders and shortcut keys in Hoard settings.
 4. Right-click an image, choose Hoard (or press H), then click a folder or press its shortcut key.
