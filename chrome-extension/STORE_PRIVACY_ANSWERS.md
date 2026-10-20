@@ -81,7 +81,7 @@ On the Privacy practices tab, you will certify data handling. For Hoard, select:
 | Data used for purposes unrelated to the item's single purpose? | **No** |
 | Data transferred to third parties (except service providers)? | **No** |
 
-**Privacy policy URL:** Required. Use a simple public page, for example a GitHub gist or repo page stating:
+**Privacy policy URL:** `https://github.com/druchen/Hoard/blob/main/PRIVACY.md` (works once this branch is merged into `main`). Summary of what it says:
 
 ```
 Hoard does not collect, store, or transmit personal data to the developer. When you save an image, data is processed in your browser and written to your computer via a local native bridge you install. No accounts or analytics are provided by this extension.
