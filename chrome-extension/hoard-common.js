@@ -390,14 +390,31 @@ function isInlineUrl(url) {
   return /^(blob|data):/i.test(url || "");
 }
 
-/** Read a blob: or data: image URL in the page so the background can save it. */
-async function readInlineImage(url) {
+/**
+ * Read an image from inside the page so the background can save it: blob:/data: images,
+ * and same-site or CORS-enabled images when Hoard has no access to the image's server.
+ */
+async function readImageInPage(url) {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to read image (${response.status})`);
   }
   const blob = await response.blob();
+  if (!blob.type.startsWith("image/") || blob.type.includes("svg")) {
+    throw new Error("URL did not return a supported image");
+  }
   return { data: await blobToBase64(blob), contentType: blob.type };
+}
+
+async function readFirstImageInPage(urls) {
+  for (const url of urls) {
+    try {
+      return await readImageInPage(url);
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
 }
 
 function sanitizePart(text) {

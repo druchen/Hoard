@@ -95,9 +95,16 @@ async function runSave(srcUrl, img, folderId) {
 
   try {
     const request = await buildSaveRequest(srcUrl, img);
-    const result = request.error
+    let result = request.error
       ? { ok: false, error: request.error }
       : await requestBackgroundSave({ ...request, folderId, referer: location.href });
+    if (result?.needsPageFetch) {
+      // Hoard can't reach the image's server directly; the page may still be allowed to read it.
+      const image = await readFirstImageInPage(request.urls);
+      if (image) {
+        result = await requestBackgroundSave({ ...request, ...image, urls: [], folderId, referer: location.href });
+      }
+    }
     reportSaveResult(result);
   } catch (err) {
     reportSaveResult({ ok: false, error: String(err?.message || err) });
@@ -130,7 +137,7 @@ async function buildSaveRequest(srcUrl, img) {
   // blob:/data: images only exist inside this page, so read them here.
   const inline = request.urls.find(isInlineUrl);
   if (inline) {
-    return { ...request, urls: [], ...(await readInlineImage(inline)) };
+    return { ...request, urls: [], ...(await readImageInPage(inline)) };
   }
   return { error: "Could not find an image URL. Right-click directly on the image." };
 }

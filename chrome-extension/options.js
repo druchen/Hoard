@@ -270,6 +270,30 @@ async function checkBridge() {
   }
 }
 
+const ALL_SITES = { origins: ["<all_urls>"] };
+
+/** "Allow on all sites" switch: the optional <all_urls> host permission. */
+async function initSiteAccess() {
+  const box = $("all-sites");
+  const refresh = async () => {
+    box.checked = await chrome.permissions.contains(ALL_SITES);
+  };
+  await refresh();
+  box.addEventListener("change", async () => {
+    try {
+      if (box.checked) {
+        await chrome.permissions.request(ALL_SITES);
+      } else {
+        await chrome.permissions.remove(ALL_SITES);
+      }
+    } finally {
+      await refresh();
+    }
+  });
+  chrome.permissions.onAdded.addListener(refresh);
+  chrome.permissions.onRemoved.addListener(refresh);
+}
+
 async function init() {
   settings = await loadHoardSettings();
   $("quality").value = String(settings.quality);
@@ -285,6 +309,7 @@ async function init() {
     void save();
   });
   $("bridge-check").addEventListener("click", checkBridge);
+  void initSiteAccess();
   $("folders").addEventListener("dragover", onFolderDragOver);
   $("folders").addEventListener("drop", (e) => e.preventDefault());
   for (const [id, key] of [

@@ -22,7 +22,7 @@ Your save folders (names, paths and shortcut keys), image format, quality and no
 
 ## Permissions
 
-Hoard asks for access to all websites so it can download the image you choose from whichever site or image server hosts it. It does not read or change page content beyond what is described above.
+Hoard installs with no access to websites. When you choose Hoard on an image, Chrome gives it temporary access to that tab only. If you turn on "Allow on all sites" in Hoard settings, it can also download images from the separate servers many sites use. Either way it does not read or change page content beyond what is described above.
 
 ## Contact
 

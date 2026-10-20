@@ -31,7 +31,7 @@ Copy-paste answers for every field: **[STORE_PRIVACY_ANSWERS.md](STORE_PRIVACY_A
 - **Title:** Hoard
 - **Summary:** Save images from any website to your own folders. Right-click, or press H and a shortcut key.
 - **Description:** See **STORE_PRIVACY_ANSWERS.md** → Store listing text (detailed description).
-- **Host permissions:** Justify `<all_urls>` in the Privacy practices tab using the copy in **STORE_PRIVACY_ANSWERS.md**. Broad host access usually means a longer (in-depth) review, and existing users are asked to re-approve the new permissions when the update installs.
+- **Host permissions:** Hoard requests no host permissions at install; it uses `activeTab`, and `<all_urls>` is an *optional* permission the user can grant from settings. Justify both with the copy in **STORE_PRIVACY_ANSWERS.md**.
 
 ## 4. After approval
 

@@ -22,22 +22,28 @@ Hoard saves images from web pages to folders the user chooses on their computer 
 Adds a single "Hoard" item when the user right-clicks an image. Choosing it opens Hoard's folder menu on the page, which is how the user starts a save. The item appears only when right-clicking an image.
 ```
 
-### host_permissions — <all_urls>
+### activeTab
 
 ```
-Hoard lets the user save any image they right-click, on whatever website they are viewing. Images are often served from CDN domains that differ from the page, so the extension needs access to all hosts to download the image file the user selected, using their browser session. The content script listens for the user's right-click / H key, shows Hoard's folder menu, an "already exists" rename dialog and a small save status message, and reads only the clicked image's address (and, on some sites, the image title) to name the file. It does not change page content, and nothing is downloaded until the user starts a save.
+When the user right-clicks an image and chooses Hoard, activeTab gives Hoard temporary access to that tab so it can show its folder menu and download the image the user chose. Hoard has no access to any site until the user makes this choice.
+```
+
+### Optional host permission — <all_urls> (not requested at install)
+
+```
+Optional. Requested only if the user turns on "Allow on all sites" in Hoard settings. Many sites serve images from separate image servers (CDNs) that activeTab does not cover; with this optional permission Hoard can download those images and lets the user press H right after a right-click instead of using the menu. Users who do not turn it on can still save images through the right-click menu.
 ```
 
 ### declarativeNetRequestWithHostAccess
 
 ```
-Many image servers reject downloads that have no Referer header. While Hoard downloads an image the user chose to save, it adds a temporary session rule that sends the page's origin as the Referer for that one request (the same value the browser sends when it displays the image), then removes the rule. No other requests are modified or blocked.
+Many image servers reject downloads that have no Referer header. While Hoard downloads an image the user chose to save (on a site it has access to), it adds a temporary session rule that sends the page's origin as the Referer for that one request (the same value the browser sends when it displays the image), then removes the rule. No other requests are modified or blocked.
 ```
 
 ### scripting
 
 ```
-If the user chooses Hoard on a tab that was already open before the extension was installed or updated, Hoard injects its own bundled content script into that tab so its folder menu can appear. Only the extension's packaged files are injected, only after the user's click.
+When the user chooses Hoard from the right-click menu, Hoard injects its own bundled content script into that tab (allowed by activeTab) to show its folder menu and save status. If the user has turned on the optional "Allow on all sites" setting, the same bundled script is registered for all pages so the H shortcut works. Only the extension's packaged files are ever injected.
 ```
 
 ### storage

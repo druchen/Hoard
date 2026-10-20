@@ -14,6 +14,8 @@ If the file already exists, choose **Rename** (a free name is proposed: `image_2
 
 Folders, shortcut keys, image format, quality and notifications are set on the **Hoard settings** page (click the Hoard toolbar icon, or **Settings** in the folder menu). Add as many folders as you like, drag the handle at the left of a row to reorder them, and use **Browse…** to open your system folder picker through the native bridge. Page notifications (bottom-right of the page) and system notifications can each be turned off.
 
+**Site access:** Hoard installs with no site access and uses `activeTab`, so the **Hoard** right-click item works on any page. Turn on **Allow on all sites** in settings to also save images hosted on other servers (CDNs) and to press **H** right after a right-click without opening the menu.
+
 | Format | Notes |
 |--------|-------|
 | WebP (default) | Quality slider, default 85 |

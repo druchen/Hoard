@@ -3,6 +3,9 @@ importScripts("hoard-settings.js");
 const NATIVE_HOST = "com.hoard.bridge";
 const MENU_ID = "hoard";
 const CONTENT_SCRIPTS = ["hoard-settings.js", "hoard-common.js", "sd.js", "artstation.js", "content.js"];
+const CONTENT_SCRIPT_ID = "hoard-page";
+// Optional, granted from Hoard settings. Without it Hoard relies on activeTab (the clicked tab only).
+const ALL_SITES = { origins: ["<all_urls>"] };
 const IMAGE_URL_EXT = /\.(jpe?g|png|gif|webp|avif|bmp)(\?|#|$)/i;
 const REFERER_RULE_ID = 1;
 const MIME_EXTENSIONS = {
@@ -241,6 +244,31 @@ async function findFolder(folderId) {
   return { folder, settings };
 }
 
+async function hasAllSitesAccess() {
+  try {
+    return await chrome.permissions.contains(ALL_SITES);
+  } catch {
+    return false;
+  }
+}
+
+/** Host of the first URL this extension cannot fetch (no all-sites access and not the activeTab origin). */
+async function firstUrlWithoutAccess(urls) {
+  if (await hasAllSitesAccess()) return null;
+  for (const url of urls) {
+    let origin;
+    try {
+      origin = new URL(url).origin;
+    } catch {
+      continue;
+    }
+    if (!/^https?:/i.test(origin)) continue;
+    const allowed = await chrome.permissions.contains({ origins: [`${origin}/*`] }).catch(() => false);
+    if (!allowed) return new URL(url).hostname;
+  }
+  return null;
+}
+
 async function hoardSaveRemote(message) {
   const { folder, settings } = await findFolder(message.folderId);
   const urls = Array.isArray(message.urls) ? message.urls : [];
@@ -270,6 +298,15 @@ async function hoardSaveRemote(message) {
   }
 
   if (!imageData) {
+    const blocked = await firstUrlWithoutAccess(urls);
+    if (blocked) {
+      // No host access to the image's server: let the page try (works for same-site and CORS images).
+      return {
+        ok: false,
+        needsPageFetch: true,
+        error: `This image is hosted on ${blocked}. Turn on "Allow on all sites" in Hoard settings to save it.`,
+      };
+    }
     throw lastError || new Error("Failed to download image");
   }
 
@@ -338,22 +375,61 @@ function createMenu() {
 
 /** Ask the page to show the folder popup; inject the page scripts first if the tab predates the extension. */
 async function showPicker(tab, info) {
-  const target = { tabId: tab.id, frameIds: [info.frameId || 0] };
   const message = { action: "hoardPick", srcUrl: info.srcUrl || "" };
-  const send = () =>
-    chrome.tabs.sendMessage(tab.id, message, { frameId: info.frameId || 0 });
+  const frameId = info.frameId || 0;
+  const send = (id) => chrome.tabs.sendMessage(tab.id, message, { frameId: id });
   try {
-    await send();
+    await send(frameId);
     return;
   } catch {
     // No Hoard page script in this frame yet.
   }
   try {
-    await chrome.scripting.executeScript({ target, files: CONTENT_SCRIPTS });
-    await send();
+    // activeTab (granted by this menu click) lets Hoard inject into the tab.
+    await chrome.scripting.executeScript({ target: { tabId: tab.id, frameIds: [frameId] }, files: CONTENT_SCRIPTS });
+    await send(frameId);
+    return;
   } catch (err) {
-    notify("Hoard", `Reload the page to use Hoard here. (${err.message || err})`);
+    if (frameId === 0) {
+      notify("Hoard", `Hoard can't run on this page. (${err.message || err})`);
+      return;
+    }
   }
+  // Image inside a frame from another site: show the menu in the top page instead.
+  try {
+    await send(0).catch(async () => {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id, frameIds: [0] }, files: CONTENT_SCRIPTS });
+      await send(0);
+    });
+  } catch (err) {
+    notify("Hoard", `Hoard can't run on this page. (${err.message || err})`);
+  }
+}
+
+/** With all-sites access, load the page scripts everywhere so H works right after a right-click. */
+async function syncContentScripts() {
+  const granted = await hasAllSitesAccess();
+  const registered = await chrome.scripting
+    .getRegisteredContentScripts({ ids: [CONTENT_SCRIPT_ID] })
+    .catch(() => []);
+  if (granted && registered.length === 0) {
+    await chrome.scripting.registerContentScripts([
+      {
+        id: CONTENT_SCRIPT_ID,
+        matches: ["<all_urls>"],
+        js: CONTENT_SCRIPTS,
+        allFrames: true,
+        runAt: "document_idle",
+        persistAcrossSessions: true,
+      },
+    ]);
+  } else if (!granted && registered.length > 0) {
+    await chrome.scripting.unregisterContentScripts({ ids: [CONTENT_SCRIPT_ID] });
+  }
+}
+
+function syncContentScriptsSafely() {
+  syncContentScripts().catch((err) => console.error("Hoard content scripts:", err));
 }
 
 /** First run (or upgrade from fixed folders): seed folders from the bridge's config.py. */
@@ -381,8 +457,13 @@ async function seedFoldersIfNeeded() {
 
 chrome.runtime.onInstalled.addListener(() => {
   createMenu();
+  syncContentScriptsSafely();
   seedFoldersIfNeeded().catch((err) => console.error("Hoard setup:", err));
 });
+
+chrome.runtime.onStartup.addListener(syncContentScriptsSafely);
+chrome.permissions.onAdded.addListener(syncContentScriptsSafely);
+chrome.permissions.onRemoved.addListener(syncContentScriptsSafely);
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== MENU_ID) return;
