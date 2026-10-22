@@ -192,18 +192,25 @@ async function encodeImage(data, contentType, sourceUrl, format, quality) {
   return { data: arrayBufferToBase64(await encoded.arrayBuffer()), ext: target.ext };
 }
 
+let installCommand = "scripts/install_native_host";
+chrome.runtime.getPlatformInfo((info) => {
+  installCommand =
+    info.os === "win"
+      ? `scripts\\install_native_host.ps1 -ExtensionId ${chrome.runtime.id}`
+      : `scripts/install_native_host.sh ${chrome.runtime.id}`;
+});
+
 function describeNativeError(message) {
-  const id = chrome.runtime.id;
   if (/not found/i.test(message)) {
-    return `Hoard native bridge is not installed. Run scripts/install_native_host with extension ID ${id}.`;
+    return `Hoard native bridge is not installed. In the Hoard folder, run: ${installCommand}`;
   }
   if (/forbidden/i.test(message)) {
-    return `The native bridge does not allow this extension. Re-run scripts/install_native_host with extension ID ${id}.`;
+    return `The native bridge does not allow this extension yet. In the Hoard folder, run: ${installCommand}`;
   }
   if (/exited|failed to start/i.test(message)) {
-    return `${message} Check that Python 3 is installed and re-run scripts/install_native_host.`;
+    return `${message} Check that Python 3 is installed, then run: ${installCommand}`;
   }
-  return `${message} Install the Hoard native bridge (see README).`;
+  return `${message} Install the Hoard native bridge: ${installCommand}`;
 }
 
 function sendToBridge(message) {
