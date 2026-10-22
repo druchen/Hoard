@@ -1,0 +1,110 @@
+# Builds the Hoard Helper installers (the native bridge with Python bundled):
+#   macOS:   dist/Hoard-Helper-macOS.pkg
+#   Windows: dist/Hoard-Helper-Windows.exe
+# Every build installs the result on the runner and pings it. Pushing a tag like
+# helper-v1.6.0 also publishes both files as a GitHub release, which is where the
+# extension's "Download Hoard Helper" button points.
+
+name: Hoard Helper
+
+on:
+  push:
+    branches: [main, claude/charming-planck-7t1ics]
+    paths:
+      - "hoard/**"
+      - "installer/**"
+      - "scripts/hoard_native_host.json"
+      - ".github/workflows/hoard-helper.yml"
+    tags: ["helper-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyInstaller
+        run: python3 -m pip install pyinstaller
+      - name: Build package
+        run: bash installer/macos/build_pkg.sh
+      - name: Install package and ping the installed helper
+        run: |
+          sudo installer -pkg dist/Hoard-Helper-macOS.pkg -target /
+          cat "/Library/Google/Chrome/NativeMessagingHosts/com.hoard.bridge.json"
+          python3 installer/selftest.py "/Library/Application Support/Hoard/bridge/hoard-bridge"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Hoard-Helper-macOS
+          path: dist/Hoard-Helper-macOS.pkg
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: |
+          python -m pip install pyinstaller pillow
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+              choco install innosetup -y --no-progress
+            }
+            "${env:ProgramFiles(x86)}\Inno Setup 6" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+      - name: Build helper
+        run: |
+          pyinstaller --noconfirm --clean --onedir --name hoard-bridge `
+            --paths . --hidden-import tkinter `
+            --distpath build/windows/pyinstaller --workpath build/windows/work --specpath build/windows `
+            installer/bridge_main.py
+          python installer/host_manifest.py --path "bridge\\hoard-bridge.exe" --out build/windows/com.hoard.bridge.json
+          python -c "from PIL import Image; Image.open('chrome-extension/icons/hoard_icon_512.png').save('build/windows/hoard.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+      - name: Build installer
+        run: |
+          $version = python -c "import hoard; print(hoard.__version__)"
+          iscc "/DAppVersion=$version" installer/windows/hoard_helper.iss
+      - name: Install silently and ping the installed helper
+        run: |
+          Start-Process dist/Hoard-Helper-Windows.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          $manifest = (Get-ItemProperty "HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.hoard.bridge")."(default)"
+          Get-Content $manifest
+          python installer/selftest.py "$env:LOCALAPPDATA\Programs\Hoard Helper\bridge\hoard-bridge.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Hoard-Helper-Windows
+          path: dist/Hoard-Helper-Windows.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/helper-v')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Hoard Helper ${{ github.ref_name }}
+          make_latest: true
+          files: |
+            artifacts/Hoard-Helper-macOS.pkg
+            artifacts/Hoard-Helper-Windows.exe
+          body: |
+            Hoard Helper lets the Hoard Chrome extension save images to your folders.
+
+            - **Mac:** download `Hoard-Helper-macOS.pkg` and open it. If macOS says it can't verify the developer, open System Settings → Privacy & Security and click **Open Anyway**.
+            - **Windows:** download `Hoard-Helper-Windows.exe` and run it. If SmartScreen appears, click **More info** → **Run anyway**.
+
+            Then open Hoard settings in Chrome and click **Check again**.

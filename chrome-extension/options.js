@@ -255,19 +255,60 @@ function updateQualityState() {
   $("quality-value").textContent = String(settings.quality);
 }
 
-async function checkBridge() {
+const HELPER_RELEASES = "https://github.com/druchen/Hoard/releases/latest";
+const HELPER_DOWNLOADS = {
+  mac: `${HELPER_RELEASES}/download/Hoard-Helper-macOS.pkg`,
+  win: `${HELPER_RELEASES}/download/Hoard-Helper-Windows.exe`,
+};
+const HELPER_POLL_MS = 4000;
+let helperPollTimer = null;
+
+async function checkBridge({ quiet = false } = {}) {
   const dot = $("bridge-dot");
   const text = $("bridge-text");
-  dot.className = "dot";
-  text.textContent = "Checking native bridge…";
+  const download = $("helper-download");
+  if (!quiet) {
+    dot.className = "dot";
+    text.textContent = "Checking Hoard Helper…";
+  }
   const response = await sendBridge({ action: "ping" });
+  dot.className = "dot";
+  clearTimeout(helperPollTimer);
   if (response.ok) {
     dot.classList.add("ok");
-    text.textContent = `Native bridge connected (v${response.version}).`;
-  } else {
-    dot.classList.add("error");
-    text.textContent = response.error || "Native bridge not reachable.";
+    text.textContent = `Hoard Helper connected (v${response.version}).`;
+    download.hidden = true;
+    await addStarterFolders();
+    return;
   }
+
+  dot.classList.add("error");
+  if (response.helperMissing) {
+    const { os } = await chrome.runtime.getPlatformInfo();
+    text.textContent = "Hoard Helper isn't installed.";
+    download.href = HELPER_DOWNLOADS[os] || HELPER_RELEASES;
+    download.hidden = false;
+  } else {
+    text.textContent = response.error || "Hoard Helper not reachable.";
+    download.hidden = true;
+  }
+  // Notice the helper as soon as it's installed.
+  helperPollTimer = setTimeout(() => checkBridge({ quiet: true }), HELPER_POLL_MS);
+}
+
+/** Once the helper is connected, give a fresh install its starting folder(s). */
+async function addStarterFolders() {
+  if (settings.folders.length > 0) return;
+  const response = await sendBridge({ action: "defaults" });
+  if (!response.ok || !Array.isArray(response.folders) || response.folders.length === 0) return;
+  settings.folders = response.folders.map((folder, i) => ({
+    id: crypto.randomUUID(),
+    name: folder.name || "",
+    path: folder.path || "",
+    key: i < 9 ? String(i + 1) : "",
+  }));
+  renderFolders();
+  await save();
 }
 
 const ALL_SITES = { origins: ["<all_urls>"] };
@@ -308,7 +349,7 @@ async function init() {
     renderFolders(folder.id);
     void save();
   });
-  $("bridge-check").addEventListener("click", checkBridge);
+  $("bridge-check").addEventListener("click", () => checkBridge());
   void initSiteAccess();
   $("folders").addEventListener("dragover", onFolderDragOver);
   $("folders").addEventListener("drop", (e) => e.preventDefault());

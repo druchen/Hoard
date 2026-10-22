@@ -31,14 +31,33 @@ On first run, the folders in [`hoard/config.py`](hoard/config.py) are offered as
 
 ## Setup
 
-```powershell
-cd scripts
-.\install_native_host.ps1 -ExtensionId YOUR_STORE_EXTENSION_ID
+Hoard needs **Hoard Helper**, a small program that writes the files (the native bridge, with Python bundled). Hoard settings shows a **Download Hoard Helper** button until it's installed:
+
+- **Mac:** `Hoard-Helper-macOS.pkg`. Installs to `/Library/Application Support/Hoard` for Chrome, Chromium and Edge. Uninstall: `sudo "/Library/Application Support/Hoard/uninstall.sh"`.
+- **Windows:** `Hoard-Helper-Windows.exe`. Per-user install (no admin) for Chrome, Edge, Brave and Chromium; uninstall from Settings → Apps.
+
+The installers are unsigned, so macOS (System Settings → Privacy & Security → **Open Anyway**) and Windows SmartScreen (**More info** → **Run anyway**) ask once.
+
+### Releasing Hoard Helper
+
+The [Hoard Helper workflow](.github/workflows/hoard-helper.yml) builds both installers on every change to `hoard/` or `installer/`, installs them on macOS and Windows runners, and pings the result. To publish a release (what the download button links to), bump `hoard/__init__.py` and push a tag:
+
+```bash
+git tag helper-v1.6.0 && git push origin helper-v1.6.0
 ```
 
-Mac: `./install_native_host.sh YOUR_STORE_EXTENSION_ID`
+Allowed extension IDs (Web Store + unpacked dev) come from `scripts/hoard_native_host.json`.
 
-Re-run the installer after pulling changes to the bridge (the Python package is `hoard`, previously `hoard_sd`).
+### Developing without the installer
+
+Run the bridge from this repo instead (needs Python 3):
+
+```powershell
+cd scripts
+.\install_native_host.ps1 -ExtensionId YOUR_EXTENSION_ID
+```
+
+Mac: `./scripts/install_native_host.sh YOUR_EXTENSION_ID`
 
 ## Store update
 

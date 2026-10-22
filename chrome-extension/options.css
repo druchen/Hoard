@@ -107,6 +107,14 @@ button.icon { width: 34px; height: 34px; padding: 0; display: inline-flex; align
 button.remove:hover { color: var(--error); border-color: var(--error); }
 
 .bridge { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+a.button {
+  display: inline-block;
+  padding: 7px 12px;
+  border-radius: 6px;
+  text-decoration: none;
+}
+a.button.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+a.button[hidden] { display: none; }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
 .dot.ok { background: var(--ok); }
 .dot.error { background: var(--error); }

@@ -1,0 +1,16 @@
+#!/bin/bash
+# Remove per-user bridge registrations left by scripts/install_native_host.sh, which
+# would otherwise take precedence over the packaged helper in /Library.
+CONSOLE_USER="$(stat -f%Su /dev/console 2>/dev/null || true)"
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+  USER_HOME="$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+  if [ -n "$USER_HOME" ]; then
+    for browser_dir in \
+      "Google/Chrome" "Google/Chrome Beta" "Google/Chrome Canary" "Chromium" \
+      "BraveSoftware/Brave-Browser" "Microsoft Edge" "Arc/User Data" "Vivaldi"; do
+      rm -f "$USER_HOME/Library/Application Support/$browser_dir/NativeMessagingHosts/com.hoard.bridge.json"
+    done
+  fi
+fi
+chmod -R a+rX "/Library/Application Support/Hoard"
+exit 0

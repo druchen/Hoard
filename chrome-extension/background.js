@@ -192,35 +192,36 @@ async function encodeImage(data, contentType, sourceUrl, format, quality) {
   return { data: arrayBufferToBase64(await encoded.arrayBuffer()), ext: target.ext };
 }
 
-let installCommand = "scripts/install_native_host";
-chrome.runtime.getPlatformInfo((info) => {
-  installCommand =
-    info.os === "win"
-      ? `scripts\\install_native_host.ps1 -ExtensionId ${chrome.runtime.id}`
-      : `scripts/install_native_host.sh ${chrome.runtime.id}`;
-});
+let helperPromptShown = false;
 
 function describeNativeError(message) {
-  if (/not found/i.test(message)) {
-    return `Hoard native bridge is not installed. In the Hoard folder, run: ${installCommand}`;
-  }
-  if (/forbidden/i.test(message)) {
-    return `The native bridge does not allow this extension yet. In the Hoard folder, run: ${installCommand}`;
+  if (/not found|forbidden/i.test(message)) {
+    // First time in this session: open settings, which has the download button.
+    if (!helperPromptShown) {
+      helperPromptShown = true;
+      chrome.runtime.openOptionsPage();
+    }
+    return "Hoard Helper isn't installed. Download it from Hoard settings, then try again.";
   }
   if (/exited|failed to start/i.test(message)) {
-    return `${message} Check that Python 3 is installed, then run: ${installCommand}`;
+    return `Hoard Helper failed to start (${message}). Reinstall it from Hoard settings.`;
   }
-  return `${message} Install the Hoard native bridge: ${installCommand}`;
+  return `${message} Reinstall Hoard Helper from Hoard settings.`;
 }
 
 function sendToBridge(message) {
   return new Promise((resolve) => {
     chrome.runtime.sendNativeMessage(NATIVE_HOST, message, (response) => {
       if (chrome.runtime.lastError) {
-        resolve({ ok: false, error: describeNativeError(chrome.runtime.lastError.message) });
+        const raw = chrome.runtime.lastError.message;
+        resolve({
+          ok: false,
+          helperMissing: /not found|forbidden/i.test(raw),
+          error: describeNativeError(raw),
+        });
         return;
       }
-      resolve(response || { ok: false, error: "Native bridge returned no response." });
+      resolve(response || { ok: false, error: "Hoard Helper returned no response." });
     });
   });
 }

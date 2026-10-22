@@ -67,7 +67,7 @@ Shows a brief success or error notification after each save attempt (for example
 ### Remote code use
 
 ```
-This extension does not execute remote code. All JavaScript (background, content scripts) is bundled in the package and reviewed as part of the upload. The extension fetches image binary data only when the user explicitly saves an image; it does not download or eval scripts from third-party servers. Native messaging invokes a fixed local program registered by the user on Windows or macOS; the bridge does not load code from the internet.
+This extension does not execute remote code. All JavaScript (background, content scripts) is bundled in the package and reviewed as part of the upload. The extension fetches image binary data only when the user explicitly saves an image; it does not download or eval scripts from third-party servers. Native messaging invokes a fixed local program (Hoard Helper) that the user installs on Windows or macOS; it does not load code from the internet.
 ```
 
 If the form is a **yes/no** question "Does your extension use remote code?" → answer **No**.
@@ -109,12 +109,12 @@ Save images from any website to your own folders. Right-click, or press H and a 
 Hoard saves images from any website to folders you choose, as WebP, JPEG, PNG or the original file.
 
 How to use:
-1. Install the Hoard native bridge on Windows or macOS (see project documentation).
+1. Install Hoard Helper on Windows or macOS (Hoard settings shows a download button).
 2. Browse to any website in Chrome.
 3. Add your save folders and shortcut keys in Hoard settings.
 4. Right-click an image, choose Hoard (or press H), then click a folder or press its shortcut key.
 
-Requires Windows or macOS and a one-time native bridge setup (Python 3).
+Requires Windows or macOS and the free Hoard Helper app (one-time install, linked from Hoard settings).
 ```
 
 ---

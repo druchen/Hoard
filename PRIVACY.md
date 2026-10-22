@@ -14,7 +14,7 @@ Hoard is a Chrome extension that saves images you choose to folders on your own 
 
 - Only when you start a save (right-click an image and choose Hoard, or press H), Hoard reads that image's address and, on some sites, its title to name the file.
 - The image is downloaded by your browser from the site it came from, using your existing browser session, and converted in your browser to the format you chose.
-- The image is then written to the folder you picked by the Hoard native bridge, a small program you install on your own computer. Nothing is sent to the developer.
+- The image is then written to the folder you picked by Hoard Helper, a small program you install on your own computer. Hoard Helper only writes files you save and opens the folder picker when you click Browse; it makes no network connections. Nothing is sent to the developer.
 
 ## Settings
 

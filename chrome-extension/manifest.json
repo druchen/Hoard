@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Hoard",
   "short_name": "Hoard",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Save images from any website to your own folders, with shortcut keys. WebP, JPEG or PNG.",
   "permissions": [
     "activeTab",

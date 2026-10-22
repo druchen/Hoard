@@ -2,3 +2,4 @@ scripts/key.pem
 chrome-extension/key.pem
 __pycache__/
 *.pyc
+build/
