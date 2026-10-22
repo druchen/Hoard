@@ -53,17 +53,11 @@ header {
 
 header img { display: block; }
 h1 { font-size: 22px; margin: 0; }
-h2 { font-size: 16px; margin: 0 0 12px; }
+h2 { font-size: 19px; margin: 0 0 12px; }
 .muted { color: var(--muted); margin: 0 0 12px; }
 .saved { margin-left: auto; color: var(--ok); font-size: 13px; }
 
-section {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 18px 20px;
-  margin-bottom: 16px;
-}
+section { margin-bottom: 32px; }
 
 kbd {
   display: inline-block;
@@ -253,7 +247,7 @@ button.refresh.spinning svg { animation: hoard-spin 0.8s linear infinite; }
 }
 .toggle input:checked { background: var(--accent); }
 .toggle input:checked::after { transform: translateX(14px); }
-.toggle input:focus-visible { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+.toggle input:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 
 @media (max-width: 640px) {
   .folders-head { display: none; }
