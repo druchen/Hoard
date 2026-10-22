@@ -159,25 +159,101 @@ input.key {
 .path-cell button { flex: none; }
 .error { grid-column: 1 / -1; margin: 0; color: var(--error); font-size: 12px; }
 
-.formats { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 14px; }
-.formats label {
-  display: flex;
+/* Check again: bare icon; solid chip on hover/press, never an outline. */
+button.refresh {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border: 1px solid var(--border);
+  justify-content: center;
+  border: none;
   border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  outline: none;
+}
+button.refresh:hover,
+button.refresh:active,
+button.refresh:focus-visible { background: var(--border); color: var(--text); filter: none; }
+button.refresh.spinning svg { animation: hoard-spin 0.8s linear infinite; }
+@keyframes hoard-spin { to { transform: rotate(360deg); } }
+
+/* Format choices: segmented buttons, the selected one solid. */
+.formats { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 14px; }
+.formats label {
+  position: relative;
+  padding: 7px 14px;
+  border-radius: 6px;
+  background: var(--input);
+  border: 1px solid var(--border);
   cursor: pointer;
 }
-.formats label:has(input:checked) { border-color: var(--accent); outline: 1px solid var(--accent); }
+.formats input { position: absolute; opacity: 0; pointer-events: none; }
+.formats label:hover { filter: brightness(0.96); }
+.formats label:has(input:checked) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
 
+/* Slim quality slider; --pct (set in options.js) fills the track up to the thumb. */
 .quality { display: flex; align-items: center; gap: 12px; }
-.quality input { flex: 1; max-width: 360px; accent-color: var(--accent); }
+.quality input[type="range"] {
+  --pct: 85%;
+  flex: 1;
+  max-width: 360px;
+  height: 4px;
+  margin: 0;
+  border-radius: 2px;
+  appearance: none;
+  background: linear-gradient(to right, var(--accent) var(--pct), var(--border) var(--pct));
+  outline: none;
+  cursor: pointer;
+}
+.quality input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.quality input[type="range"]:disabled { cursor: default; }
 .quality output { min-width: 32px; font-variant-numeric: tabular-nums; font-weight: 600; }
 .quality.disabled { opacity: 0.45; }
 
-.toggle { display: flex; align-items: center; gap: 10px; padding: 4px 0; cursor: pointer; width: fit-content; }
-.toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+/* On/off switches. */
+.toggle { display: flex; align-items: center; gap: 12px; padding: 5px 0; cursor: pointer; width: fit-content; }
+.toggle input {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: 10px;
+  appearance: none;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.toggle input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s;
+}
+.toggle input:checked { background: var(--accent); }
+.toggle input:checked::after { transform: translateX(14px); }
+.toggle input:focus-visible { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
 
 @media (max-width: 640px) {
   .folders-head { display: none; }

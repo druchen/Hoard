@@ -250,6 +250,7 @@ function renderFormats() {
 function updateQualityState() {
   const format = HOARD_FORMATS[settings.format];
   const slider = $("quality");
+  slider.style.setProperty("--pct", `${((settings.quality - 1) / 99) * 100}%`);
   slider.disabled = !format.lossy;
   $("quality-row").classList.toggle("disabled", !format.lossy);
   $("quality-value").textContent = String(settings.quality);
@@ -267,11 +268,14 @@ async function checkBridge({ quiet = false } = {}) {
   const dot = $("bridge-dot");
   const text = $("bridge-text");
   const download = $("helper-download");
+  const refresh = $("bridge-check");
   if (!quiet) {
     dot.className = "dot";
     text.textContent = "Checking Hoard Helper…";
+    refresh.classList.add("spinning");
   }
   const response = await sendBridge({ action: "ping" });
+  refresh.classList.remove("spinning");
   dot.className = "dot";
   clearTimeout(helperPollTimer);
   if (response.ok) {
@@ -340,7 +344,7 @@ async function init() {
   $("quality").value = String(settings.quality);
   $("quality").addEventListener("input", (e) => {
     settings.quality = clampHoardQuality(e.target.value);
-    $("quality-value").textContent = String(settings.quality);
+    updateQualityState();
     scheduleSave();
   });
   $("add-folder").addEventListener("click", () => {
